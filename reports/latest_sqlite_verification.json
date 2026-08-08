@@ -1,0 +1,38 @@
+{
+  "created_at": "2026-08-08T07:49:04.132012+00:00",
+  "database": "sqlite",
+  "foreign_key_violations": 0,
+  "index_checks": {
+    "active_memory": true,
+    "auth_session": true,
+    "logistics_lookup": true,
+    "outbox_dispatch": true
+  },
+  "integrity_check": "ok",
+  "migrations": [
+    "001_initial",
+    "002_approval_roles",
+    "003_memory",
+    "004_api_worker",
+    "005_governed_learning",
+    "006_enterprise_depth"
+  ],
+  "passed": true,
+  "query_plans": {
+    "active_memory": [
+      "SEARCH memory_records USING INDEX idx_memory_active (tenant_id=? AND user_id=? AND status=?)",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "auth_session": [
+      "SEARCH auth_sessions USING INDEX sqlite_autoindex_auth_sessions_2 (token_hash=?)"
+    ],
+    "logistics_lookup": [
+      "SEARCH logistics_quotes USING INDEX idx_logistics_lookup (tenant_id=? AND product_id=? AND valid_until>?)"
+    ],
+    "outbox_dispatch": [
+      "SEARCH outbox_events USING COVERING INDEX idx_outbox_dispatch (status=?)",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ]
+  },
+  "suite": "enterprise_depth_sqlite_v1"
+}

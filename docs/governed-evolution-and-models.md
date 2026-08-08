@@ -7,7 +7,7 @@ ProcureOps 不允许生产 Agent 自动重写 Prompt、规则或代码。这里�
 ```text
 用户反馈
   -> Prompt 候选（必须关联反馈和基线版本）
-  -> 离线契约/安全评测
+  -> 同一 Gold Set 的基线/候选 Harness FakeModel 回归
   -> compliance_approver 审批
   -> 人工发布新版本
   -> 新任务读取活动版本
@@ -18,7 +18,7 @@ ProcureOps 不允许生产 Agent 自动重写 Prompt、规则或代码。这里�
 
 ## 2. 用户记忆
 
-当前只识别明确表达且在白名单内的非敏感偏好，例如交付时间、供应商比较策略和是否接受等效件。生命周期为：
+当前只识别明确表达且在白名单内的非敏感偏好，例如交付时间、供应商比较策略和是否接受等效件。每条记录带完整性哈希，值还要经过指令注入和大小限制检查。生命周期为：
 
 ```text
 显式偏好 -> candidate -> 用户确认 -> confirmed -> 纠错/删除/TTL 过期
@@ -36,12 +36,12 @@ ProcureOps 不允许生产 Agent 自动重写 Prompt、规则或代码。这里�
 - Base URL：`https://dashscope.aliyuncs.com/compatible-mode/v1`
 - 结构化视觉请求设置 `enable_thinking=false` 并要求 JSON object
 
-切换只需设置 `AGENT_TEXT_PROVIDER=qwen` 和/或 `AGENT_VISION_PROVIDER=qwen`。业务模块不感知 Provider，调用仍经过预算、重试、响应契约和审计 Harness。
+配置 `AGENT_TEXT_ROUTE=qwen,deepseek` 和 `AGENT_VISION_ROUTE=qwen,zhipu` 后，Qwen 是首选，其他 Provider 是故障回退。路由层对每个真实提供方尝试分别计预算和审计，并带连续失败熔断；业务模块不感知 Provider。
 
 本机当前没有 DashScope 密钥，因此项目只完成了适配器、FakeTransport 测试和相同评测命令入口，没有伪造真实千问通过报告。配置密钥后运行：
 
 ```powershell
-& ".\.venv\Scripts\python.exe" scripts\run_live_model_eval.py --provider qwen --limit 10
+& ".\.venv\Scripts\python.exe" scripts\run_live_model_eval.py --provider qwen --limit 20
 & ".\.venv\Scripts\python.exe" scripts\run_live_vision_smoke.py --provider qwen
 ```
 

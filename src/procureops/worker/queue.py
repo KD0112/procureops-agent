@@ -212,6 +212,19 @@ class SQLiteWorkQueue:
             ).fetchall()
         return tuple(_job(row) for row in rows)
 
+    def job_for_idempotency(
+        self,
+        *,
+        tenant_id: str,
+        idempotency_key: str,
+    ) -> Job | None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM work_queue WHERE tenant_id=? AND idempotency_key=?",
+                (tenant_id, idempotency_key),
+            ).fetchone()
+        return _job(row) if row is not None else None
+
 
 def _job(row) -> Job:
     return Job(

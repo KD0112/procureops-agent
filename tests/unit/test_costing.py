@@ -48,3 +48,15 @@ def test_costing_rejects_insufficient_inventory() -> None:
             quantity=Decimal("3"),
             option=option(available="2"),
         )
+
+
+def test_line_cost_accepts_authoritative_logistics_freight_override() -> None:
+    line = calculate_line_cost(
+        line_number=1,
+        quantity=Decimal("2"),
+        option=option(),
+        freight_override=Decimal("45.004"),
+    )
+
+    assert line.freight == Decimal("45.00")
+    assert line.total_amount == line.net_amount + line.tax_amount + Decimal("45.00")

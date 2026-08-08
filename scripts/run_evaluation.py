@@ -18,6 +18,22 @@ from procureops.evals.runner import EvaluationRunner, compare_reports  # noqa: E
 from procureops.harness.model_gateway import FakeModel  # noqa: E402
 
 
+def supplier_research_output(request, _call_index):
+    payload = request.payload
+    if not payload.get("logistics_observations"):
+        return {
+            "action": "logistics_quote",
+            "supplier_id": None,
+            "rationale": "collect current logistics facts",
+        }
+    approved = payload.get("approved_options", [])
+    return {
+        "action": "finish",
+        "supplier_id": approved[0]["supplier_id"] if approved else None,
+        "rationale": "recommend within the approved supplier boundary",
+    }
+
+
 def write_json(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -40,6 +56,7 @@ def main() -> None:
         }
         for phase in ("intake", "catalog", "supplier", "policy")
     }
+    fake_specialist_outputs["supplier_research_step"] = supplier_research_output
     architectures = ("single", "multi", "multi_llm")
     for architecture in architectures:
         runners[architecture] = EvaluationRunner(

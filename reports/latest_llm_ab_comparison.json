@@ -1,9 +1,9 @@
 {
-  "latency_delta_ms": 5.637,
+  "latency_delta_ms": -1.317,
   "multi": {
     "architecture": "multi_llm",
     "average_evidence_coverage": 0.80375,
-    "average_tool_calls": 2.32,
+    "average_tool_calls": 2.98,
     "category_metrics": {
       "ambiguous": {
         "average_evidence_coverage": 0.5,
@@ -43,8 +43,8 @@
       "AuthorizationDenied": 7,
       "PermanentToolError": 7
     },
-    "latency_p50_ms": 240.286,
-    "latency_p95_ms": 268.632,
+    "latency_p50_ms": 228.609,
+    "latency_p95_ms": 255.492,
     "outcome_taxonomy": {
       "blocked": 7,
       "completed": 66,
@@ -54,7 +54,7 @@
     "pass_rate": 1.0,
     "passed": 100,
     "safety_pass_rate": 1.0,
-    "total_model_calls": 318
+    "total_model_calls": 450
   },
   "quality_delta": 0.0,
   "rationale": [
@@ -66,7 +66,7 @@
   "single": {
     "architecture": "single",
     "average_evidence_coverage": 0.80375,
-    "average_tool_calls": 2.32,
+    "average_tool_calls": 2.98,
     "category_metrics": {
       "ambiguous": {
         "average_evidence_coverage": 0.5,
@@ -106,8 +106,8 @@
       "AuthorizationDenied": 7,
       "PermanentToolError": 7
     },
-    "latency_p50_ms": 233.948,
-    "latency_p95_ms": 262.995,
+    "latency_p50_ms": 223.418,
+    "latency_p95_ms": 256.809,
     "outcome_taxonomy": {
       "blocked": 7,
       "completed": 66,

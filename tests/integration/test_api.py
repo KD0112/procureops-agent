@@ -13,6 +13,10 @@ HEADERS = {
     "X-Actor-ID": "integration-buyer",
     "X-Actor-Roles": "procurement_operator,department_approver,compliance_approver",
 }
+APPROVER_HEADERS = {
+    **HEADERS,
+    "X-Actor-ID": "integration-approver",
+}
 
 
 def _client(tmp_path: Path) -> TestClient:
@@ -21,6 +25,7 @@ def _client(tmp_path: Path) -> TestClient:
             project_root=PROJECT_ROOT,
             database_path=tmp_path / "api.sqlite3",
             var_root=tmp_path / "var",
+            allow_header_auth=True,
         )
     )
 
@@ -56,7 +61,7 @@ def test_api_happy_path_pauses_for_approval_and_resumes_idempotently(
 
         approved = client.post(
             f"/api/tasks/{task_id}/approval",
-            headers=HEADERS,
+            headers=APPROVER_HEADERS,
             json={"decision": "approve"},
         )
         assert approved.status_code == 202
@@ -241,11 +246,11 @@ def test_api_governed_prompt_release_requires_eval_and_compliance(tmp_path: Path
         ).status_code == 403
         assert client.post(
             f"/api/governance/prompt-candidates/{candidate_id}/approve",
-            headers=HEADERS,
+            headers=APPROVER_HEADERS,
         ).status_code == 200
         release = client.post(
             f"/api/governance/prompt-candidates/{candidate_id}/release",
-            headers=HEADERS,
+            headers=APPROVER_HEADERS,
         )
         assert release.status_code == 200
         assert client.get("/api/governance", headers=HEADERS).json()[

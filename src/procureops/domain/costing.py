@@ -16,6 +16,7 @@ def calculate_line_cost(
     line_number: int,
     quantity: Decimal,
     option: SupplierOption,
+    freight_override: Decimal | None = None,
 ) -> CostLine:
     if quantity <= 0:
         raise ValueError("quantity must be positive")
@@ -23,7 +24,7 @@ def calculate_line_cost(
         raise ValueError("supplier inventory is insufficient")
     net_amount = money(quantity * option.unit_price)
     tax_amount = money(net_amount * option.tax_rate)
-    freight = money(option.freight)
+    freight = money(option.freight if freight_override is None else freight_override)
     return CostLine(
         line_number=line_number,
         product_id=option.product_id,

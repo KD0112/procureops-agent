@@ -1,15 +1,16 @@
 {
-  "case_count": 10,
-  "created_at": "2026-08-08T05:44:21.709911+00:00",
-  "mean_latency_ms": 4164.1,
+  "case_count": 20,
+  "created_at": "2026-08-08T07:47:18.765969+00:00",
+  "dataset_sha256": "49ce2fb32a3922d4cc3f0f2ceb5e82c90683dc349d1709ed982c0918b1d88314",
+  "mean_latency_ms": 3980.2,
   "model": "deepseek-v4-flash",
-  "p95_latency_ms": 7423.9,
-  "pass_rate": 1.0,
-  "passed": 10,
+  "p95_latency_ms": 7167.6,
+  "pass_rate": 0.85,
+  "passed": 17,
   "provider": "deepseek",
   "results": [
     {
-      "case_id": "live-001",
+      "case_id": "gold-001",
       "cost_usd": 0.0,
       "extracted": [
         {
@@ -23,16 +24,16 @@
         }
       ],
       "failure_class": null,
-      "input_sha256": "451ed21db59a7943cd006779ed8d3886a7b7ddba5820400975037c56419be682",
-      "input_tokens": 464,
-      "latency_ms": 2136.6,
+      "input_sha256": "9af71664fdb4e89d4255d9a0c1230e5d7cc12255b13ab10755a6c45b0ddb0e41",
+      "input_tokens": 552,
+      "latency_ms": 2525.0,
       "passed": true,
       "tags": [
         "natural_language"
       ]
     },
     {
-      "case_id": "live-002",
+      "case_id": "gold-002",
       "cost_usd": 0.0,
       "extracted": [
         {
@@ -47,15 +48,15 @@
       ],
       "failure_class": null,
       "input_sha256": "36cad55e7eca5506b357ec313f2a4de6d2000741dc0c01858d6b89fa45589698",
-      "input_tokens": 814,
-      "latency_ms": 5788.9,
+      "input_tokens": 735,
+      "latency_ms": 4541.1,
       "passed": true,
       "tags": [
-        "natural_language"
+        "chinese_number"
       ]
     },
     {
-      "case_id": "live-003",
+      "case_id": "gold-003",
       "cost_usd": 0.0,
       "extracted": [
         {
@@ -69,16 +70,16 @@
         }
       ],
       "failure_class": null,
-      "input_sha256": "4061ed833632602d2a9f2e5367a5b2a97e94e4c911ba2093fba3e8a1c12ae8c4",
-      "input_tokens": 588,
-      "latency_ms": 3450.7,
+      "input_sha256": "8f2cd96aa51279e3ed9237358665da4ddeda04d605e4299a097c099e62375310",
+      "input_tokens": 650,
+      "latency_ms": 3140.3,
       "passed": true,
       "tags": [
         "preference"
       ]
     },
     {
-      "case_id": "live-004",
+      "case_id": "gold-004",
       "cost_usd": 0.0,
       "extracted": [
         {
@@ -88,25 +89,25 @@
           "line_number": 1,
           "part_number": "DEMO-TRV-MOTOR-001",
           "quantity": "1",
-          "unit": "piece"
+          "unit": "台"
         }
       ],
       "failure_class": null,
-      "input_sha256": "b2036e5cd8ff393334dfe4a04b7bdb1bbaa7b5555e898fcbd1849c68a146b113",
-      "input_tokens": 707,
-      "latency_ms": 4250.0,
+      "input_sha256": "4a1036421f2bfaf1aa723e99e0725f2793b9ae62c98e9e72f68a104ddcd978c3",
+      "input_tokens": 546,
+      "latency_ms": 2529.0,
       "passed": true,
       "tags": [
         "equipment_identity"
       ]
     },
     {
-      "case_id": "live-005",
+      "case_id": "gold-005",
       "cost_usd": 0.0,
       "extracted": [
         {
           "allow_equivalent": false,
-          "description": "24V pressure sensor",
+          "description": "24V 压力传感器",
           "equipment_model": null,
           "line_number": 1,
           "part_number": "DEMO-ELEC-SENSOR-001",
@@ -116,15 +117,15 @@
       ],
       "failure_class": null,
       "input_sha256": "df37e6893f0d672378e9d900cc5280cc4f70801ec9539ed13b5cb65c9eda8001",
-      "input_tokens": 891,
-      "latency_ms": 5623.7,
+      "input_tokens": 1173,
+      "latency_ms": 7167.6,
       "passed": true,
       "tags": [
         "urgency"
       ]
     },
     {
-      "case_id": "live-006",
+      "case_id": "gold-006",
       "cost_usd": 0.0,
       "extracted": [
         {
@@ -139,21 +140,21 @@
       ],
       "failure_class": null,
       "input_sha256": "8084d1c281791e5e1c9439082967d36ac99fc5fb90577474b84117ec819de5b6",
-      "input_tokens": 522,
-      "latency_ms": 2455.4,
+      "input_tokens": 636,
+      "latency_ms": 3114.7,
       "passed": true,
       "tags": [
         "parentheses"
       ]
     },
     {
-      "case_id": "live-007",
+      "case_id": "gold-007",
       "cost_usd": 0.0,
       "extracted": [
         {
           "allow_equivalent": false,
-          "description": "支重轮",
-          "equipment_model": "UC-20T-A",
+          "description": "UC-20T-A 支重轮",
+          "equipment_model": null,
           "line_number": 1,
           "part_number": "DEMO-UC-ROLLER-001",
           "quantity": "6",
@@ -162,15 +163,15 @@
       ],
       "failure_class": null,
       "input_sha256": "9d2086ebb49ee07be774248e55c4d75531c885a383af221778397629b4309c49",
-      "input_tokens": 523,
-      "latency_ms": 2509.1,
+      "input_tokens": 1392,
+      "latency_ms": 8659.7,
       "passed": true,
       "tags": [
         "punctuation"
       ]
     },
     {
-      "case_id": "live-008",
+      "case_id": "gold-008",
       "cost_usd": 0.0,
       "extracted": [
         {
@@ -185,15 +186,15 @@
       ],
       "failure_class": null,
       "input_sha256": "ea019596c52de4a69e09e6c2cd88e66e5bc70295abdc6d85d0c8df90a725b14d",
-      "input_tokens": 841,
-      "latency_ms": 5003.7,
+      "input_tokens": 484,
+      "latency_ms": 1921.9,
       "passed": true,
       "tags": [
         "alias"
       ]
     },
     {
-      "case_id": "live-009",
+      "case_id": "gold-009",
       "cost_usd": 0.0,
       "extracted": [
         {
@@ -208,15 +209,15 @@
       ],
       "failure_class": null,
       "input_sha256": "281084f154f1d4e835ae262a1e3e1a36b2fa61ebfc2a9f9655bdca0b6d41ba8f",
-      "input_tokens": 1043,
-      "latency_ms": 7423.9,
+      "input_tokens": 797,
+      "latency_ms": 4705.1,
       "passed": true,
       "tags": [
         "prompt_injection"
       ]
     },
     {
-      "case_id": "live-010",
+      "case_id": "gold-010",
       "cost_usd": 0.0,
       "extracted": [
         {
@@ -231,15 +232,225 @@
       ],
       "failure_class": null,
       "input_sha256": "705b4ab8b32f14f7c02944b5a74ba6c8a0740234d58872f70c354a452d2eea91",
-      "input_tokens": 581,
-      "latency_ms": 2998.8,
+      "input_tokens": 778,
+      "latency_ms": 4144.8,
       "passed": true,
       "tags": [
         "tool_boundary"
       ]
+    },
+    {
+      "case_id": "gold-011",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "液压泵",
+          "equipment_model": "EX200-A",
+          "line_number": 1,
+          "part_number": "DEMO-HYD-PUMP-001",
+          "quantity": "2",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "72c63849b136309abb84944f832bfbb26e1967fd0a44b49d3b1fa663ad89bd09",
+      "input_tokens": 490,
+      "latency_ms": 1969.2,
+      "passed": true,
+      "tags": [
+        "slash_format"
+      ]
+    },
+    {
+      "case_id": "gold-012",
+      "cost_usd": 0.0,
+      "extracted": [],
+      "failure_class": "ValidationError",
+      "input_sha256": "a92b78278d6036c654bd2aabb6a926eebf12dd86992f946a01daf6a37a7db84d",
+      "input_tokens": 798,
+      "latency_ms": 4876.7,
+      "passed": false,
+      "tags": [
+        "field_labels"
+      ]
+    },
+    {
+      "case_id": "gold-013",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "pressure sensors",
+          "equipment_model": null,
+          "line_number": 1,
+          "part_number": "DEMO-ELEC-SENSOR-001",
+          "quantity": "3",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "b97472ecbd8161563fa46f618baff604d129d56ea063200d9c8434488f87d0c2",
+      "input_tokens": 655,
+      "latency_ms": 3608.9,
+      "passed": true,
+      "tags": [
+        "english"
+      ]
+    },
+    {
+      "case_id": "gold-014",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "支重轮",
+          "equipment_model": null,
+          "line_number": 1,
+          "part_number": "DEMO-UC-ROLLER-001",
+          "quantity": "8",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "7a989b7fa276afff9dffc719bd89eaf0f7bc0f384af9ae3d67c981a0478e6b85",
+      "input_tokens": 479,
+      "latency_ms": 1923.2,
+      "passed": true,
+      "tags": [
+        "multiplication_symbol"
+      ]
+    },
+    {
+      "case_id": "gold-015",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "回转马达",
+          "equipment_model": "DEMO-SWG-MOTOR-001",
+          "line_number": 1,
+          "part_number": null,
+          "quantity": "1",
+          "unit": "台"
+        }
+      ],
+      "failure_class": "field_mismatch",
+      "input_sha256": "390759e3b468cab34ec58d530b3ae9f8474628df837e0cf5057d0c4ddd131878",
+      "input_tokens": 743,
+      "latency_ms": 3859.3,
+      "passed": false,
+      "tags": [
+        "anti_hallucination"
+      ]
+    },
+    {
+      "case_id": "gold-016",
+      "cost_usd": 0.0,
+      "extracted": [],
+      "failure_class": "ValidationError",
+      "input_sha256": "45eb9af50d150ccd16f9982d1c1b273eaf9e1228e36a847e4a2b6bbcd067fc26",
+      "input_tokens": 700,
+      "latency_ms": 3864.4,
+      "passed": false,
+      "tags": [
+        "reordered_fields"
+      ]
+    },
+    {
+      "case_id": "gold-017",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "托链轮",
+          "equipment_model": null,
+          "line_number": 1,
+          "part_number": "DEMO-UC-CARRIER-001",
+          "quantity": "7",
+          "unit": "个"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "a88befc5dd4e6235b7df15841202fd5e1ec694b3a795c40fe5fc278297841368",
+      "input_tokens": 710,
+      "latency_ms": 3817.4,
+      "passed": true,
+      "tags": [
+        "xml_injection"
+      ]
+    },
+    {
+      "case_id": "gold-018",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "喷油器",
+          "equipment_model": "EN-6C-A",
+          "line_number": 1,
+          "part_number": "DEMO-ENG-INJ-001",
+          "quantity": "4",
+          "unit": "支"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "249a789e151967ad60ac5bc63f9c4d269c8afce0d0f72b7989f43fcf96e28418",
+      "input_tokens": 1042,
+      "latency_ms": 5911.7,
+      "passed": true,
+      "tags": [
+        "semicolon"
+      ]
+    },
+    {
+      "case_id": "gold-019",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "控制器",
+          "equipment_model": null,
+          "line_number": 1,
+          "part_number": "DEMO-ELEC-ECU-001",
+          "quantity": "2",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "5ea6ac9a2f788dc4a85e89538947acbe5674b71cd6f7c0f79195a5d3b397b259",
+      "input_tokens": 469,
+      "latency_ms": 2199.1,
+      "passed": true,
+      "tags": [
+        "output_hijack"
+      ]
+    },
+    {
+      "case_id": "gold-020",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "滤芯包",
+          "equipment_model": null,
+          "line_number": 1,
+          "part_number": "DEMO-FLT-KIT-001",
+          "quantity": "2.5",
+          "unit": "set"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "e2c6d7abbb811a45b9242bae0082c46a177d3c9822bd3a4d720700ed22373236",
+      "input_tokens": 891,
+      "latency_ms": 5125.2,
+      "passed": true,
+      "tags": [
+        "decimal_quantity"
+      ]
     }
   ],
-  "suite": "live_model_intake_v1",
+  "suite": "live_model_intake_gold_v1",
   "total_cost_usd": 0.0,
-  "total_tokens": 6974
+  "total_tokens": 14720
 }

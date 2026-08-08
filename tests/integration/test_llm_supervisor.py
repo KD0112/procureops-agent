@@ -25,6 +25,18 @@ def test_llm_supervisor_calls_four_advisory_specialists_through_harness(
         }
         for phase in ("intake", "catalog", "supplier", "policy")
     }
+    outputs["supplier_research_step"] = [
+        {
+            "action": "logistics_quote",
+            "supplier_id": None,
+            "rationale": "observe current logistics facts",
+        },
+        {
+            "action": "finish",
+            "supplier_id": "supplier-alpha",
+            "rationale": "recommend an approved supplier",
+        },
+    ]
     client = FakeModel(outputs)
     audit = InMemoryAuditSink()
     tool_gateway = ToolGateway(audit=audit)
@@ -56,9 +68,9 @@ def test_llm_supervisor_calls_four_advisory_specialists_through_harness(
         "supplier",
         "policy",
     ]
-    assert len(client.calls) == 4
+    assert len(client.calls) == 6
     assert all(item.decision.startswith("reviewed_") for item in workflow.trace.messages)
-    assert sum(event.event_type == "model.succeeded" for event in audit.events()) == 4
+    assert sum(event.event_type == "model.succeeded" for event in audit.events()) == 6
 
 
 def test_llm_specialist_failure_is_diagnosable_but_cannot_block_authoritative_flow(

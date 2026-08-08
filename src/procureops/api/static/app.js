@@ -1,9 +1,7 @@
-const headers = {
-  "X-Tenant-ID": "tenant_engineering_machinery",
-  "X-Actor-ID": "local-demo-user",
-  "X-Actor-Roles": "procurement_operator,department_approver,compliance_approver",
+const state = {
+  tasks: [], selected: null, detail: null, memory: [], governance: null, models: null,
+  token: window.sessionStorage.getItem("procureops_token"), identity: null,
 };
-const state = { tasks: [], selected: null, detail: null, memory: [], governance: null, models: null };
 const $ = (selector) => document.querySelector(selector);
 const statusLabel = {
   draft: "草稿", ingesting: "解析中", needs_input: "待补充", matching: "目录匹配",
@@ -13,10 +11,34 @@ const statusLabel = {
 };
 
 async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+  const auth = state.token ? { Authorization: `Bearer ${state.token}` } : {};
+  const response = await fetch(path, { ...options, headers: { ...auth, ...(options.headers || {}) } });
   const payload = await response.json().catch(() => ({}));
+  if (response.status === 401 && path !== "/api/auth/login") showLogin();
   if (!response.ok) throw new Error(payload.detail || `请求失败：${response.status}`);
   return payload;
+}
+
+function showLogin() {
+  const dialog = $("#login-dialog");
+  if (!dialog.open) dialog.showModal();
+}
+
+async function loadIdentity() {
+  state.identity = await api("/api/auth/me");
+  $("#identity-status").textContent = `${state.identity.actor_id} · ${state.identity.roles.join(" / ")}`;
+}
+
+async function bootstrap() {
+  if (!state.token) { showLogin(); return; }
+  try {
+    await loadIdentity();
+    await Promise.all([loadTasks(), loadModelStatus()]);
+  } catch (error) {
+    state.token = null; state.identity = null;
+    window.sessionStorage.removeItem("procureops_token");
+    showLogin(); toast(error.message);
+  }
 }
 
 function toast(message) {
@@ -166,8 +188,9 @@ async function loadGovernance() {
 function renderGovernance() {
   const data = state.governance; const active = data.active_prompt;
   $("#active-prompt").innerHTML = `<strong>${escapeHtml(active.prompt_version)}</strong><p>作用域 ${escapeHtml(active.scope)}</p><small>SHA-256 ${escapeHtml(active.prompt_hash.slice(0, 16))}…</small>${active.prompt_version !== "1.0.0" ? `<button class="secondary compact danger" id="rollback-button" data-release="${active.release_id}">回滚当前版本</button>` : ""}`;
-  const text = state.models.text; const vision = state.models.vision;
-  $("#model-routing").innerHTML = `<strong>${state.models.live_models_enabled ? "实时模型已启用" : "实时模型默认关闭"}</strong><p>文本：${escapeHtml(text.provider)} / ${escapeHtml(text.model || "配置不完整")}</p><p>视觉：${escapeHtml(vision.provider)} / ${escapeHtml(vision.model || "配置不完整")}</p><small>千问切换需要 DASHSCOPE_API_KEY；页面和日志不会返回密钥。</small>`;
+  const textRoutes = (state.models.routes?.text || []).map((item) => `${item.provider}/${item.model}`).join(" → ") || "未配置";
+  const visionRoutes = (state.models.routes?.vision || []).map((item) => `${item.provider}/${item.model}`).join(" → ") || "未配置";
+  $("#model-routing").innerHTML = `<strong>${state.models.live_models_enabled ? "实时模型已启用" : "实时模型默认关闭"}</strong><p>文本路由：${escapeHtml(textRoutes)}</p><p>视觉路由：${escapeHtml(visionRoutes)}</p><small>配置 DashScope 后 Qwen 自动成为首选；失败会按路由降级并进入熔断审计。</small>`;
   const feedback = data.feedback;
   $("#feedback-list").innerHTML = feedback.length ? feedback.map((item) => `<article class="governance-item"><div><strong>${escapeHtml(item.feedback_type)}</strong><span class="mini-status ${item.status}">${escapeHtml(item.status)}</span></div><p>${escapeHtml(item.summary)}</p><small>${new Date(item.created_at).toLocaleString("zh-CN")}</small></article>`).join("") : '<div class="empty">暂无反馈</div>';
   const candidates = data.candidates.filter((item) => item.candidate_version !== "1.0.0");
@@ -215,8 +238,25 @@ $("#new-task-form").addEventListener("submit", async (event) => {
 });
 
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]); }
+$("#login-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); $("#login-error").textContent = "";
+  try {
+    const session = await api("/api/auth/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: $("#login-email").value, password: $("#login-password").value, tenant_id: "tenant_engineering_machinery" }),
+    });
+    state.token = session.token; window.sessionStorage.setItem("procureops_token", session.token);
+    $("#login-password").value = ""; $("#login-dialog").close();
+    await loadIdentity(); await Promise.all([loadTasks(), loadModelStatus()]); toast("已使用服务端身份登录");
+  } catch (error) { $("#login-error").textContent = error.message; }
+});
+$("#switch-account-button").addEventListener("click", async () => {
+  try { if (state.token) await api("/api/auth/logout", { method: "POST" }); } catch {}
+  state.token = null; state.identity = null; window.sessionStorage.removeItem("procureops_token");
+  $("#identity-status").textContent = "未登录"; showLogin();
+});
 $("#feedback-form").addEventListener("submit", async (event) => { event.preventDefault(); const summary = $("#feedback-summary").value.trim(); if (!summary) return; try { await api("/api/governance/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback_type: $("#feedback-type").value, summary, correction: {} }) }); event.target.reset(); toast("反馈已进入治理队列"); await loadGovernance(); } catch (error) { toast(error.message); } });
 $("#memory-list").addEventListener("click", handleMemoryAction); $("#candidate-list").addEventListener("click", handleCandidateAction); $("#new-candidate-button").addEventListener("click", createCandidateFromFeedback);
 document.querySelectorAll(".dialog-close").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
 $("#new-task-button").addEventListener("click", openDialog); $("#welcome-new-button").addEventListener("click", openDialog); $("#memory-button").addEventListener("click", () => openMemory().catch((error) => toast(error.message))); $("#governance-button").addEventListener("click", () => openGovernance().catch((error) => toast(error.message))); $("#refresh-button").addEventListener("click", () => loadTasks()); $("#worker-button").addEventListener("click", runWorker);
-Promise.all([loadTasks(), loadModelStatus()]).catch((error) => toast(error.message)); window.setInterval(() => { if (state.selected) loadDetail(state.selected).catch(() => {}); }, 4000);
+bootstrap(); window.setInterval(() => { if (state.token && state.selected) loadDetail(state.selected).catch(() => {}); }, 4000);

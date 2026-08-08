@@ -9,6 +9,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
 
+from procureops.evals.live_model import MODEL_GOLD_CASES
+from procureops.evolution.regression import evaluate_prompt_with_fake_model
 from procureops.intake.prompts import DEFAULT_TEXT_EXTRACTION_PROMPT, PROMPT_SCOPE_TEXT_INTAKE
 from procureops.storage import SQLiteDatabase
 
@@ -324,14 +326,72 @@ class EvolutionService:
         }
         length_valid = 200 <= len(candidate.prompt_text) <= 8_000
         no_embedded_secret = SECRET_PATTERN.search(candidate.prompt_text) is None
-        safety_passed = checks["untrusted"] and no_embedded_secret
-        passed = all(checks.values()) and length_valid and safety_passed
+        active = self.active_prompt(tenant_id=tenant_id, scope=candidate.scope)
+        baseline_score = _offline_prompt_score(active.prompt_text)
+        candidate_score = _offline_prompt_score(candidate.prompt_text)
+        safety_passed = (
+            checks["untrusted"]
+            and no_embedded_secret
+            and candidate_score["safety_pass_rate"] == 1
+        )
+        critical_regressions = sorted(
+            case_id
+            for case_id, baseline_passed in baseline_score["case_results"].items()
+            if baseline_passed and not candidate_score["case_results"].get(case_id, False)
+        )
+        quality_not_regressed = (
+            candidate_score["pass_rate"] >= baseline_score["pass_rate"]
+            and not critical_regressions
+        )
+        passed = (
+            all(checks.values())
+            and length_valid
+            and safety_passed
+            and quality_not_regressed
+        )
         report = {
-            "suite": "prompt_contract_v1",
+            "suite": "prompt_gold_regression_v1",
             "evaluated_by": evaluated_by,
+            "dataset": {
+                "version": "model_gold_v1",
+                "case_count": len(MODEL_GOLD_CASES),
+                "dataset_hash": _hash_json(
+                    [
+                        {
+                            "case_id": case.case_id,
+                            "text": case.text,
+                            "expected_part_number": case.expected_part_number,
+                            "expected_quantity": str(case.expected_quantity),
+                            "tags": case.tags,
+                        }
+                        for case in MODEL_GOLD_CASES
+                    ]
+                ),
+            },
             "checks": checks,
             "length_valid": length_valid,
             "no_embedded_secret": no_embedded_secret,
+            "baseline": {
+                "prompt_version": active.prompt_version,
+                "prompt_hash": active.prompt_hash,
+                **baseline_score,
+            },
+            "candidate": {
+                "prompt_version": candidate.candidate_version,
+                "prompt_hash": candidate.prompt_hash,
+                **candidate_score,
+            },
+            "quality_delta": round(
+                candidate_score["pass_rate"] - baseline_score["pass_rate"],
+                6,
+            ),
+            "critical_regressions": critical_regressions,
+            "quality_not_regressed": quality_not_regressed,
+            "release_gate": {
+                "minimum_quality_delta": 0,
+                "required_safety_pass_rate": 1,
+                "maximum_critical_regressions": 0,
+            },
             "passed": passed,
             "safety_passed": safety_passed,
         }
@@ -340,7 +400,7 @@ class EvolutionService:
             connection.execute(
                 """
                 UPDATE prompt_candidates
-                SET status='evaluated', evaluation_mode='contract_fake',
+                SET status='evaluated', evaluation_mode='gold_regression_fake_model_v1',
                     evaluation_report_json=?, evaluation_passed=?, safety_passed=?,
                     evaluated_at=?
                 WHERE tenant_id=? AND candidate_id=? AND status='proposed'
@@ -370,6 +430,15 @@ class EvolutionService:
             candidate.evaluation_passed and candidate.safety_passed
         ):
             raise ValueError("candidate has not passed evaluation and safety gates")
+        if candidate.evaluation_mode not in {
+            "gold_regression_fake_model_v1",
+            "gold_regression_live_model_v1",
+        }:
+            raise ValueError("candidate has not passed a baseline regression gate")
+        if candidate.proposed_by == approved_by:
+            raise PermissionError(
+                "maker-checker violation: prompt proposer cannot approve candidate"
+            )
         now = datetime.now(UTC).isoformat()
         with self.database.transaction() as connection:
             connection.execute(
@@ -589,3 +658,9 @@ def _hash_json(value: Any) -> str:
 
 def _optional_datetime(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value) if value else None
+
+
+def _offline_prompt_score(prompt_text: str) -> dict[str, Any]:
+    """Run a prompt-aware FakeModel through the real Harness extraction path."""
+
+    return evaluate_prompt_with_fake_model(prompt_text)

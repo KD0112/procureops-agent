@@ -9,6 +9,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 ```
 
 验收输出应包含知识文档校验、Ruff 通过、测试通过和覆盖率不低于 90%。普通验证不调用真实 API。
+脚本还会执行 SQLite `integrity_check`、外键检查、六个迁移版本校验以及物流、记忆、会话、Outbox 四条查询的 `EXPLAIN QUERY PLAN`。
 
 ## 2. 两分钟 Happy Path
 
@@ -38,11 +39,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 
 演示顺序：
 
-1. 新建采购任务，先选“单 Agent + 工具”，运行 Worker，展示证据、审批和 PO 草稿。
-2. 输入“以后送货请安排在工作日上午”，运行后打开“用户记忆”，确认候选；新任务会出现 `memory.preferred_delivery_window` 证据。
-3. 打开“进化治理”，提交纠错反馈，从反馈创建候选，依次执行离线评测、合规审批、人工发布，并演示回滚。
-4. 再以“确定性多 Agent”创建任务，在时间线查看 `supervisor.trace`。
-5. 只有模型配置完整时才选择“模型多 Agent”；该模式每个专业 Agent 都经过 Model Gateway。
+1. 使用 `buyer@procureops.local` / `ProcureOps-Demo-2026!` 登录，新建“单 Agent + 工具”任务并运行 Worker。
+2. 待审批后切换到 `approver@procureops.local`（相同默认密码）批准，再运行 Worker，展示 maker-checker、证据和 PO 草稿。
+3. 输入“以后供应商优先比较交期”，运行后打开“用户记忆”，确认候选；下一任务会以交期策略选择供应商并记录物流证据。
+4. 打开“进化治理”，提交纠错反馈，从反馈创建候选，运行 20 条 Gold Set 基线/候选回归；切换合规账号审批、发布并演示回滚。
+5. 再以“确定性多 Agent”创建任务，在时间线查看 `supervisor.trace`。
+6. 只有模型配置完整时才选择“模型多 Agent”；Supplier Research Agent 最多 3 步且只能访问只读物流工具。
 
 ## 5. 真实模型接入
 
@@ -53,8 +55,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 千问的文本和视觉模型共用 DashScope OpenAI-compatible 适配：
 
 ```powershell
-$env:AGENT_TEXT_PROVIDER="qwen"
-$env:AGENT_VISION_PROVIDER="qwen"
+$env:AGENT_TEXT_ROUTE="qwen,deepseek"
+$env:AGENT_VISION_ROUTE="qwen,zhipu"
 $env:DASHSCOPE_API_KEY="<your-key>"
 $env:QWEN_TEXT_MODEL="qwen-flash"
 $env:QWEN_VISION_MODEL="qwen-vl-plus"

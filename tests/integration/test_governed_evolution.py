@@ -38,6 +38,10 @@ def test_feedback_cannot_change_live_prompt_without_evaluation_and_human_release
     )
     assert evaluated.status == "evaluated"
     assert evaluated.evaluation_passed is True
+    assert evaluated.evaluation_mode == "gold_regression_fake_model_v1"
+    assert evaluated.evaluation_report["baseline"]["pass_rate"] == 1
+    assert evaluated.evaluation_report["candidate"]["pass_rate"] == 1
+    assert evaluated.evaluation_report["critical_regressions"] == []
     service.approve_candidate(
         tenant_id=TENANT_ID,
         candidate_id=candidate.candidate_id,
@@ -97,6 +101,7 @@ def test_unsafe_candidate_fails_closed_and_cannot_be_approved(
 
     assert evaluated.evaluation_passed is False
     assert evaluated.safety_passed is False
+    assert evaluated.evaluation_report["critical_regressions"]
     try:
         service.approve_candidate(
             tenant_id=TENANT_ID,

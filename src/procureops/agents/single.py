@@ -10,19 +10,21 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
 
+from procureops.agents.supplier_research import BoundedSupplierResearchAgent
 from procureops.domain.costing import calculate_line_cost, summarize_costs
 from procureops.domain.enums import TaskStatus
 from procureops.domain.models import ApprovalGrant, RunContext
 from procureops.domain.policy import ApprovalRequirement, ProcurementPolicy
 from procureops.domain.procurement import (
     CostSummary,
+    LogisticsQuote,
     ProductCandidate,
     SupplierOption,
 )
 from procureops.harness.budget import RunBudgetLedger
 from procureops.harness.tool_gateway import ToolGateway
 from procureops.intake import IntakeResult
-from procureops.memory import MemoryService
+from procureops.memory import MemoryService, PreferenceDecisionEngine
 from procureops.rag import RetrievalHit, Retriever
 from procureops.storage import ProcureOpsRepository
 
@@ -51,6 +53,8 @@ class SingleAgentWorkflow:
         phase_observer: Callable[[str, dict[str, Any]], None] | None = None,
         retriever: Retriever | None = None,
         memory_service: MemoryService | None = None,
+        supplier_researcher: BoundedSupplierResearchAgent | None = None,
+        run_ledger: RunBudgetLedger | None = None,
     ) -> None:
         self.repository = repository
         self.tool_gateway = tool_gateway
@@ -58,6 +62,9 @@ class SingleAgentWorkflow:
         self.phase_observer = phase_observer
         self.retriever = retriever
         self.memory_service = memory_service
+        self.supplier_researcher = supplier_researcher
+        self.run_ledger = run_ledger
+        self.preference_engine = PreferenceDecisionEngine()
 
     def start(
         self,
@@ -150,8 +157,9 @@ class SingleAgentWorkflow:
                 questions=intake.questions,
             )
 
+        memory_preferences = self._confirmed_memory(context)
         task = self._transition(task.status, task.version, context, TaskStatus.MATCHING)
-        ledger = RunBudgetLedger(context)
+        ledger = self.run_ledger or RunBudgetLedger(context)
         matched: list[tuple[dict[str, Any], ProductCandidate]] = []
         questions: list[str] = []
         for line in intake.lines:
@@ -254,7 +262,41 @@ class SingleAgentWorkflow:
                     status=TaskStatus(task.status),
                     questions=(f"第 {line.line_number} 行没有有效的准入供应商报价。",),
                 )
-            selected = approved_options[0]
+            research_result = None
+            if self.supplier_researcher is not None:
+                research_result = self.supplier_researcher.research(
+                    context=context,
+                    ledger=ledger,
+                    product_id=candidate.product_id,
+                    quantity=line.quantity,
+                    options=tuple(options),
+                    confirmed_preferences=memory_preferences,
+                    explicit_strategy=task.request.get("supplier_strategy"),
+                )
+                decision = research_result.decision
+            else:
+                logistics_response = self.tool_gateway.execute(
+                    context=context,
+                    ledger=ledger,
+                    tool_name="logistics_quote",
+                    arguments={
+                        "tenant_id": context.tenant_id,
+                        "product_id": candidate.product_id,
+                        "supplier_ids": [item.supplier_id for item in approved_options],
+                    },
+                )
+                logistics = tuple(
+                    LogisticsQuote.model_validate(item)
+                    for item in logistics_response.output
+                )
+                decision = self.preference_engine.select_supplier(
+                    options=tuple(options),
+                    logistics=logistics,
+                    quantity=line.quantity,
+                    confirmed_preferences=memory_preferences,
+                    explicit_strategy=task.request.get("supplier_strategy"),
+                )
+            selected = decision.selected
             self.repository.select_supplier(
                 tenant_id=context.tenant_id,
                 task_id=context.task_id,
@@ -263,6 +305,7 @@ class SingleAgentWorkflow:
             )
             for field_name, value in (
                 ("unit_price", selected.unit_price),
+                ("tax_rate", selected.tax_rate),
                 ("available_quantity", selected.available_quantity),
                 ("selected_supplier_id", selected.supplier_id),
             ):
@@ -280,11 +323,93 @@ class SingleAgentWorkflow:
                     confidence=Decimal("1"),
                     producer="supplier_lookup_v1",
                 )
+            self.repository.add_evidence(
+                tenant_id=context.tenant_id,
+                task_id=context.task_id,
+                item_id=str(row["item_id"]),
+                field_name="logistics_lead_time_days",
+                value=decision.logistics_quote.lead_time_days,
+                source_type="database_tool",
+                source_id=decision.logistics_quote.logistics_quote_id,
+                locator=(
+                    f"logistics_quotes:{decision.logistics_quote.logistics_quote_id}"
+                ),
+                observed_at=decision.logistics_quote.observed_at,
+                valid_until=decision.logistics_quote.valid_until,
+                confidence=Decimal("1"),
+                producer="logistics_quote_v1",
+            )
+            self.repository.add_evidence(
+                tenant_id=context.tenant_id,
+                task_id=context.task_id,
+                item_id=str(row["item_id"]),
+                field_name="freight",
+                value=decision.logistics_quote.shipping_cost,
+                source_type="database_tool",
+                source_id=decision.logistics_quote.logistics_quote_id,
+                locator=(
+                    f"logistics_quotes:{decision.logistics_quote.logistics_quote_id}"
+                ),
+                observed_at=decision.logistics_quote.observed_at,
+                valid_until=decision.logistics_quote.valid_until,
+                confidence=Decimal("1"),
+                producer="logistics_quote_v1",
+            )
+            self.repository.add_evidence(
+                tenant_id=context.tenant_id,
+                task_id=context.task_id,
+                item_id=str(row["item_id"]),
+                field_name="supplier_selection_strategy",
+                value=decision.strategy,
+                source_type=decision.strategy_source,
+                source_id=(
+                    context.actor_id
+                    if decision.strategy_source == "confirmed_memory"
+                    else context.tenant_id
+                ),
+                locator=f"preference_strategy:{decision.strategy_source}",
+                observed_at=datetime.now(UTC),
+                valid_until=None,
+                confidence=Decimal("1"),
+                producer="preference_decision_engine_v1",
+            )
+            self.repository.append_workflow_event(
+                tenant_id=context.tenant_id,
+                task_id=context.task_id,
+                event_type="supplier.selection_decided",
+                payload={
+                    "line_number": line.line_number,
+                    "selected_supplier_id": selected.supplier_id,
+                    "strategy": decision.strategy,
+                    "strategy_source": decision.strategy_source,
+                    "ranked_supplier_ids": list(decision.ranked_supplier_ids),
+                    "logistics_quote_id": (
+                        decision.logistics_quote.logistics_quote_id
+                    ),
+                    "lead_time_days": decision.logistics_quote.lead_time_days,
+                    "model_recommendation": (
+                        research_result.model_recommendation
+                        if research_result is not None
+                        else None
+                    ),
+                    "used_fallback": (
+                        research_result.used_fallback
+                        if research_result is not None
+                        else False
+                    ),
+                    "research_steps": (
+                        [item.model_dump(mode="json") for item in research_result.steps]
+                        if research_result is not None
+                        else []
+                    ),
+                },
+            )
             cost_lines.append(
                 calculate_line_cost(
                     line_number=line.line_number,
                     quantity=line.quantity,
                     option=selected,
+                    freight_override=decision.logistics_quote.shipping_cost,
                 )
             )
 
@@ -308,7 +433,6 @@ class SingleAgentWorkflow:
                 ),
             },
         )
-        memory_preferences = self._confirmed_memory(context)
         po_arguments = {
             "tenant_id": context.tenant_id,
             "task_id": context.task_id,

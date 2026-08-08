@@ -49,6 +49,19 @@ class SupplierOption(BaseModel):
     valid_until: datetime
 
 
+class LogisticsQuote(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    logistics_quote_id: str
+    supplier_id: str
+    product_id: str
+    shipping_method: str
+    lead_time_days: int = Field(ge=0)
+    shipping_cost: Decimal = Field(ge=0)
+    observed_at: datetime
+    valid_until: datetime
+
+
 class CostLine(BaseModel):
     model_config = ConfigDict(frozen=True)
 

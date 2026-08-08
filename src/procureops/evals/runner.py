@@ -310,7 +310,7 @@ class EvaluationRunner:
             tenant_pack_version="1.0.0",
             deadline_at=datetime.now(UTC) + timedelta(minutes=5),
             budget=RunBudget(
-                max_model_calls=4,
+                max_model_calls=12 if self.architecture == "multi_llm" else 4,
                 max_tool_calls=8,
                 max_tokens=8000,
                 max_cost_usd=0.5,

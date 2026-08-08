@@ -14,7 +14,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from procureops.config import load_environment  # noqa: E402
 from procureops.evals.live_model import (  # noqa: E402
-    DEFAULT_LIVE_CASES,
+    MODEL_GOLD_CASES,
     run_live_model_eval,
     save_live_model_report,
 )
@@ -31,12 +31,12 @@ def main() -> None:
         default=PROJECT_ROOT / "reports" / "latest_live_model_eval.json",
     )
     args = parser.parse_args()
-    if not 1 <= args.limit <= len(DEFAULT_LIVE_CASES):
-        raise SystemExit(f"--limit must be between 1 and {len(DEFAULT_LIVE_CASES)}")
+    if not 1 <= args.limit <= len(MODEL_GOLD_CASES):
+        raise SystemExit(f"--limit must be between 1 and {len(MODEL_GOLD_CASES)}")
     load_environment(PROJECT_ROOT)
     report = run_live_model_eval(
         client=client_from_environment(kind="text", provider_override=args.provider),
-        cases=DEFAULT_LIVE_CASES[: args.limit],
+        cases=MODEL_GOLD_CASES[: args.limit],
     )
     path = save_live_model_report(report, args.output)
     print(

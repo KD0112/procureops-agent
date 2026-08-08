@@ -58,6 +58,28 @@ def register_procurement_tools(
         )
         return {"po_draft": row, "database_idempotency_hit": database_hit}
 
+    def logistics_quote(arguments: Mapping[str, Any]) -> list[dict[str, Any]]:
+        maybe_raise_fault("logistics_quote")
+        raw_supplier_ids = arguments.get("supplier_ids")
+        if not isinstance(raw_supplier_ids, list) or not raw_supplier_ids:
+            raise PermanentToolError("logistics_quote requires supplier_ids")
+        quotes = repository.logistics_quotes(
+            tenant_id=str(arguments["tenant_id"]),
+            product_id=str(arguments["product_id"]),
+            supplier_ids=tuple(str(item) for item in raw_supplier_ids),
+        )
+        return [item.model_dump(mode="json") for item in quotes]
+
+    gateway.register(
+        ToolDefinition(
+            name="logistics_quote",
+            handler=logistics_quote,
+            risk_level=RiskLevel.R0_READ_ONLY,
+            action_kind=ActionKind.READ,
+            max_attempts=2,
+            tenant_argument="tenant_id",
+        )
+    )
     gateway.register(
         ToolDefinition(
             name="catalog_lookup",

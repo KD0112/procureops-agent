@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -44,16 +45,39 @@ class FakeModel:
     provider = "fake"
     model = "fake-model-v1"
 
-    def __init__(self, scripted_outputs: dict[str, dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        scripted_outputs: dict[
+            str,
+            dict[str, Any]
+            | list[dict[str, Any]]
+            | Callable[[ModelRequest, int], dict[str, Any]],
+        ],
+    ) -> None:
         self.scripted_outputs = scripted_outputs
         self.calls: list[ModelRequest] = []
+        self._purpose_calls: dict[str, int] = {}
 
     def generate(self, request: ModelRequest) -> ModelResponse:
         self.calls.append(request)
         if request.purpose not in self.scripted_outputs:
             raise PermanentToolError(f"no FakeModel output for purpose: {request.purpose}")
+        scripted = self.scripted_outputs[request.purpose]
+        call_index = self._purpose_calls.get(request.purpose, 0)
+        if callable(scripted):
+            output = scripted(request, call_index)
+            self._purpose_calls[request.purpose] = call_index + 1
+        elif isinstance(scripted, list):
+            if call_index >= len(scripted):
+                raise PermanentToolError(
+                    f"FakeModel outputs exhausted for purpose: {request.purpose}"
+                )
+            output = scripted[call_index]
+            self._purpose_calls[request.purpose] = call_index + 1
+        else:
+            output = scripted
         return ModelResponse(
-            output=self.scripted_outputs[request.purpose],
+            output=output,
             provider=self.provider,
             model=self.model,
         )

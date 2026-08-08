@@ -7,13 +7,13 @@ from pathlib import Path
 
 from procureops.agents import LLMSupervisorWorkflow, SingleAgentWorkflow, SupervisorWorkflow
 from procureops.agents.single import default_policy
+from procureops.auth import AuthService
 from procureops.config import load_environment
 from procureops.demo import seed_demo_database
 from procureops.domain.models import RunBudget, RunContext
 from procureops.evolution import EvolutionService
 from procureops.harness.audit import AuditSink
-from procureops.harness.model_gateway import ModelGateway
-from procureops.harness.provider_clients import client_from_environment
+from procureops.harness.provider_clients import routed_gateway_from_environment
 from procureops.harness.tool_gateway import ToolGateway
 from procureops.memory import MemoryService
 from procureops.rag import HashingEmbeddingProvider, SQLiteKnowledgeIndex
@@ -21,6 +21,7 @@ from procureops.rag.governance import scan_knowledge_base
 from procureops.storage import ProcureOpsRepository, SQLiteDatabase
 from procureops.storage.blobs import LocalBlobStore
 from procureops.tools import register_procurement_tools
+from procureops.worker.outbox import SQLiteOutbox
 from procureops.worker.queue import SQLiteWorkQueue
 
 
@@ -30,9 +31,11 @@ class ProcureOpsRuntime:
     database: SQLiteDatabase
     repository: ProcureOpsRepository
     queue: SQLiteWorkQueue
+    outbox: SQLiteOutbox
     blobs: LocalBlobStore
     retriever: SQLiteKnowledgeIndex
     memory: MemoryService
+    auth: AuthService
     evolution: EvolutionService
     audit_path: Path
     replay_root: Path
@@ -60,15 +63,26 @@ class ProcureOpsRuntime:
             retriever.rebuild(documents)
         evolution = EvolutionService(database)
         evolution.bootstrap_baseline(tenant_id="tenant_engineering_machinery")
+        auth = AuthService(database)
+        auth.bootstrap_demo_users(
+            tenant_id="tenant_engineering_machinery",
+            password=os.environ.get(
+                "PROCUREOPS_DEMO_PASSWORD",
+                "ProcureOps-Demo-2026!",
+            ),
+        )
         database.optimize()
+        queue = SQLiteWorkQueue(database)
         return cls(
             project_root=project_root,
             database=database,
             repository=repository,
-            queue=SQLiteWorkQueue(database),
+            queue=queue,
+            outbox=SQLiteOutbox(database, queue),
             blobs=LocalBlobStore(runtime_root / "uploads"),
             retriever=retriever,
             memory=MemoryService(database),
+            auth=auth,
             evolution=evolution,
             audit_path=runtime_root / "audit.jsonl",
             replay_root=runtime_root / "replays" / "api",
@@ -105,8 +119,8 @@ class ProcureOpsRuntime:
             return LLMSupervisorWorkflow(
                 **common,
                 context=context,
-                model_gateway=ModelGateway(
-                    client=client_from_environment(kind="text"),
+                model_gateway=routed_gateway_from_environment(
+                    kind="text",
                     audit=audit,
                 ),
             )
@@ -138,7 +152,7 @@ class ProcureOpsRuntime:
             tenant_pack_version="1.0.0",
             deadline_at=datetime.now(UTC) + timedelta(minutes=5),
             budget=RunBudget(
-                max_model_calls=8,
+                max_model_calls=16,
                 max_tool_calls=12,
                 max_tokens=16_000,
                 max_cost_usd=1,

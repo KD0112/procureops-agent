@@ -101,6 +101,30 @@ DEFAULT_LIVE_CASES = (
 )
 
 
+def load_gold_cases(path: Path) -> tuple[LiveEvalCase, ...]:
+    cases: list[LiveEvalCase] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        item = json.loads(line)
+        cases.append(
+            LiveEvalCase(
+                case_id=str(item["case_id"]),
+                text=str(item["text"]),
+                expected_part_number=str(item["expected_part_number"]),
+                expected_quantity=Decimal(str(item["expected_quantity"])),
+                tags=tuple(str(tag) for tag in item.get("tags", [])),
+            )
+        )
+    if not cases or len({case.case_id for case in cases}) != len(cases):
+        raise ValueError("gold model dataset must be non-empty with unique case IDs")
+    return tuple(cases)
+
+
+MODEL_GOLD_PATH = Path(__file__).resolve().parents[3] / "data" / "evals" / "model_gold_v1.jsonl"
+MODEL_GOLD_CASES = load_gold_cases(MODEL_GOLD_PATH)
+
+
 def run_live_model_eval(
     *,
     client: ModelClient,
@@ -151,7 +175,13 @@ def run_live_model_eval(
     latencies = sorted(result["latency_ms"] for result in results)
     passed_count = sum(result["passed"] for result in results)
     return {
-        "suite": "live_model_intake_v1",
+        "suite": "live_model_intake_gold_v1",
+        "dataset_sha256": hashlib.sha256(
+            "\n".join(
+                f"{case.case_id}|{case.text}|{case.expected_part_number}|{case.expected_quantity}"
+                for case in cases
+            ).encode("utf-8")
+        ).hexdigest(),
         "created_at": datetime.now(UTC).isoformat(),
         "provider": client.provider,
         "model": client.model,

@@ -51,6 +51,36 @@ def build_operational_snapshots(
     return quotations, inventory
 
 
+def build_logistics_snapshots(
+    products: list[dict[str, Any]],
+    *,
+    now: datetime | None = None,
+) -> list[dict[str, str | int]]:
+    observed_at = (now or datetime.now(UTC)).replace(microsecond=0)
+    valid_until = observed_at + timedelta(days=7)
+    snapshots: list[dict[str, str | int]] = []
+    profiles = (
+        ("supplier-alpha", "standard_freight", 3, Decimal("45.00")),
+        ("supplier-beta", "priority_freight", 1, Decimal("80.00")),
+        ("supplier-unapproved", "economy_freight", 5, Decimal("20.00")),
+    )
+    for index, product in enumerate(products, start=1):
+        for supplier_id, method, lead_time, shipping_cost in profiles:
+            snapshots.append(
+                {
+                    "logistics_quote_id": f"lq-{index:02d}-{supplier_id}",
+                    "supplier_id": supplier_id,
+                    "product_id": str(product["product_id"]),
+                    "shipping_method": method,
+                    "lead_time_days": lead_time,
+                    "shipping_cost": str(shipping_cost),
+                    "observed_at": observed_at.isoformat(),
+                    "valid_until": valid_until.isoformat(),
+                }
+            )
+    return snapshots
+
+
 def seed_demo_database(
     database: SQLiteDatabase,
     *,
@@ -71,6 +101,7 @@ def seed_demo_database(
         (data_root / "demo" / "suppliers.json").read_text(encoding="utf-8")
     )
     quotations, inventory = build_operational_snapshots(products, now=now)
+    logistics = build_logistics_snapshots(products, now=now)
     database.migrate()
     repository = ProcureOpsRepository(database)
     repository.seed_tenant(
@@ -79,5 +110,6 @@ def seed_demo_database(
         suppliers=suppliers,
         quotations=quotations,
         inventory=inventory,
+        logistics=logistics,
     )
     return repository

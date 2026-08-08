@@ -4,6 +4,7 @@ from typing import Any
 
 from procureops.agents.multi import SpecialistMessage, SupervisorTrace
 from procureops.agents.single import SingleAgentWorkflow, WorkflowResult
+from procureops.agents.supplier_research import BoundedSupplierResearchAgent
 from procureops.domain.models import ApprovalGrant, RunContext
 from procureops.domain.policy import ProcurementPolicy
 from procureops.harness.budget import RunBudgetLedger
@@ -35,6 +36,10 @@ class LLMSupervisorWorkflow:
         self.context = context
         self.model_gateway = model_gateway
         self.ledger = RunBudgetLedger(context)
+        supplier_researcher = BoundedSupplierResearchAgent(
+            model_gateway=model_gateway,
+            tool_gateway=tool_gateway,
+        )
         self.workflow = SingleAgentWorkflow(
             repository=repository,
             tool_gateway=tool_gateway,
@@ -42,6 +47,8 @@ class LLMSupervisorWorkflow:
             phase_observer=self._review_phase,
             retriever=retriever,
             memory_service=memory_service,
+            supplier_researcher=supplier_researcher,
+            run_ledger=self.ledger,
         )
 
     def _review_phase(self, phase: str, payload: dict[str, Any]) -> None:

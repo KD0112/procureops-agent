@@ -2,6 +2,7 @@ from procureops.harness.audit import AuditEvent, InMemoryAuditSink, JsonlAuditSi
 from procureops.harness.budget import RunBudgetLedger
 from procureops.harness.idempotency import InMemoryIdempotencyStore
 from procureops.harness.model_gateway import FakeModel, ModelGateway, ModelRequest, ModelResponse
+from procureops.harness.model_router import ModelRoute, RoutedModelGateway
 from procureops.harness.tool_gateway import ToolDefinition, ToolExecutionResult, ToolGateway
 
 __all__ = [
@@ -13,9 +14,10 @@ __all__ = [
     "ModelGateway",
     "ModelRequest",
     "ModelResponse",
+    "ModelRoute",
+    "RoutedModelGateway",
     "RunBudgetLedger",
     "ToolDefinition",
     "ToolExecutionResult",
     "ToolGateway",
 ]
-

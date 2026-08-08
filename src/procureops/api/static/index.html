@@ -31,6 +31,8 @@
         <div><span class="eyebrow">TENANT</span><strong>工程机械配件采购</strong></div>
         <div class="top-actions">
           <span id="model-status" class="role">模型配置检测中…</span>
+          <span id="identity-status" class="role">未登录</span>
+          <button id="switch-account-button" class="secondary compact">切换账号</button>
           <button id="worker-button" class="secondary">运行下一项 Worker</button>
         </div>
       </header>
@@ -128,6 +130,24 @@
         <section><div class="panel-head"><div><span class="eyebrow">CANDIDATES</span><h2>Prompt 候选</h2></div><button id="new-candidate-button" class="secondary compact">从反馈创建</button></div><div id="candidate-list" class="governance-list"></div></section>
       </div>
     </div>
+  </dialog>
+
+  <dialog id="login-dialog" class="login-dialog">
+    <form id="login-form">
+      <div class="dialog-head"><div><span class="eyebrow">LOCAL IDENTITY</span><h2>登录 ProcureOps</h2></div></div>
+      <p class="dialog-copy">角色由服务端租户成员关系签发，页面不能通过请求头伪造权限。采购申请人与审批人必须使用不同账号。</p>
+      <label>演示账号
+        <select id="login-email">
+          <option value="buyer@procureops.local">采购申请人 · buyer@procureops.local</option>
+          <option value="approver@procureops.local">部门审批人 · approver@procureops.local</option>
+          <option value="compliance@procureops.local">合规审批人 · compliance@procureops.local</option>
+        </select>
+      </label>
+      <label>本机密码<input id="login-password" type="password" autocomplete="current-password" required></label>
+      <small class="login-hint">默认演示密码：ProcureOps-Demo-2026!（可用环境变量覆盖）</small>
+      <p id="login-error" class="error"></p>
+      <div class="dialog-actions"><button class="primary" type="submit">登录</button></div>
+    </form>
   </dialog>
   <div id="toast" class="toast"></div>
   <script src="/static/app.js"></script>

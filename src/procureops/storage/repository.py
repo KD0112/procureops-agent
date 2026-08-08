@@ -9,6 +9,7 @@ from uuid import uuid4
 from procureops.domain.enums import TaskStatus
 from procureops.domain.models import ApprovalGrant, canonical_hash
 from procureops.domain.procurement import (
+    LogisticsQuote,
     ProcurementLine,
     ProductCandidate,
     SupplierOption,
@@ -39,6 +40,7 @@ class ProcureOpsRepository:
         suppliers: list[dict[str, Any]],
         quotations: list[dict[str, Any]],
         inventory: list[dict[str, Any]],
+        logistics: list[dict[str, Any]] | None = None,
     ) -> None:
         created_at = utc_now().isoformat()
         with self.database.transaction() as connection:
@@ -144,6 +146,33 @@ class ProcureOpsRepository:
                         snapshot["valid_until"],
                     ),
                 )
+            for quote in logistics or []:
+                connection.execute(
+                    """
+                    INSERT INTO logistics_quotes(
+                        tenant_id, logistics_quote_id, supplier_id, product_id,
+                        shipping_method, lead_time_days, shipping_cost,
+                        observed_at, valid_until
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(tenant_id, logistics_quote_id) DO UPDATE SET
+                        shipping_method=excluded.shipping_method,
+                        lead_time_days=excluded.lead_time_days,
+                        shipping_cost=excluded.shipping_cost,
+                        observed_at=excluded.observed_at,
+                        valid_until=excluded.valid_until
+                    """,
+                    (
+                        tenant["tenant_id"],
+                        quote["logistics_quote_id"],
+                        quote["supplier_id"],
+                        quote["product_id"],
+                        quote["shipping_method"],
+                        quote["lead_time_days"],
+                        quote["shipping_cost"],
+                        quote["observed_at"],
+                        quote["valid_until"],
+                    ),
+                )
 
     def create_task(
         self,
@@ -176,6 +205,102 @@ class ProcureOpsRepository:
                 ),
             )
         return self.get_task(tenant_id=tenant_id, task_id=task_id)
+
+    def create_task_with_outbox(
+        self,
+        *,
+        tenant_id: str,
+        created_by: str,
+        request: dict[str, Any],
+        workflow_version: str,
+        task_id: str,
+        job_payload: dict[str, Any],
+        idempotency_key: str,
+        upload: dict[str, Any] | None = None,
+    ) -> tuple[TaskSnapshot, str, str | None]:
+        """Atomically persist the task, optional upload metadata, and queue intent."""
+
+        now = utc_now().isoformat()
+        outbox_event_id = str(uuid4())
+        upload_id = str(uuid4()) if upload is not None else None
+        outbox_payload = {
+            "job_type": "process_intake",
+            "job_payload": job_payload,
+            "max_attempts": 3,
+        }
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO procurement_tasks(
+                    task_id, tenant_id, created_by, status, request_json,
+                    workflow_version, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    task_id,
+                    tenant_id,
+                    created_by,
+                    TaskStatus.DRAFT,
+                    _json(request),
+                    workflow_version,
+                    now,
+                    now,
+                ),
+            )
+            if upload is not None and upload_id is not None:
+                connection.execute(
+                    """
+                    INSERT INTO task_uploads(
+                        upload_id, tenant_id, task_id, original_filename,
+                        storage_key, content_type, size_bytes, sha256, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        upload_id,
+                        tenant_id,
+                        task_id,
+                        upload["original_filename"],
+                        upload["storage_key"],
+                        upload["content_type"],
+                        upload["size_bytes"],
+                        upload["sha256"],
+                        now,
+                    ),
+                )
+            connection.execute(
+                """
+                INSERT INTO outbox_events(
+                    event_id, tenant_id, aggregate_type, aggregate_id,
+                    event_type, payload_json, payload_hash, idempotency_key,
+                    status, created_at
+                ) VALUES (?, ?, 'procurement_task', ?, 'work.requested',
+                          ?, ?, ?, 'pending', ?)
+                """,
+                (
+                    outbox_event_id,
+                    tenant_id,
+                    task_id,
+                    _json(outbox_payload),
+                    canonical_hash(outbox_payload),
+                    idempotency_key,
+                    now,
+                ),
+            )
+        return (
+            self.get_task(tenant_id=tenant_id, task_id=task_id),
+            outbox_event_id,
+            upload_id,
+        )
+
+    def task_created_by(self, *, tenant_id: str, task_id: str) -> str:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT created_by FROM procurement_tasks WHERE tenant_id=? AND task_id=?",
+                (tenant_id, task_id),
+            ).fetchone()
+        if row is None:
+            raise KeyError("task not found in tenant scope")
+        return str(row["created_by"])
 
     def list_tasks(
         self,
@@ -500,6 +625,42 @@ class ProcureOpsRepository:
             )
             if cursor.rowcount != 1:
                 raise KeyError("task item not found")
+
+    def logistics_quotes(
+        self,
+        *,
+        tenant_id: str,
+        product_id: str,
+        supplier_ids: tuple[str, ...],
+        at: datetime | None = None,
+    ) -> tuple[LogisticsQuote, ...]:
+        if not supplier_ids:
+            return ()
+        observed_at = (at or utc_now()).isoformat()
+        placeholders = ",".join("?" for _ in supplier_ids)
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM logistics_quotes
+                WHERE tenant_id=? AND product_id=? AND valid_until>=?
+                  AND supplier_id IN ({placeholders})
+                ORDER BY lead_time_days, shipping_cost, supplier_id
+                """,
+                (tenant_id, product_id, observed_at, *supplier_ids),
+            ).fetchall()
+        return tuple(
+            LogisticsQuote(
+                logistics_quote_id=row["logistics_quote_id"],
+                supplier_id=row["supplier_id"],
+                product_id=row["product_id"],
+                shipping_method=row["shipping_method"],
+                lead_time_days=row["lead_time_days"],
+                shipping_cost=Decimal(row["shipping_cost"]),
+                observed_at=datetime.fromisoformat(row["observed_at"]),
+                valid_until=datetime.fromisoformat(row["valid_until"]),
+            )
+            for row in rows
+        )
 
     def add_evidence(
         self,

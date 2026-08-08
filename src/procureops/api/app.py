@@ -6,7 +6,17 @@ from pathlib import Path
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -15,7 +25,10 @@ from procureops.agents.single import WorkflowResult
 from procureops.domain.enums import TaskStatus
 from procureops.domain.policy import ApprovalRequirement
 from procureops.evals.replay import ReplayStore
-from procureops.harness.provider_clients import model_configuration_status
+from procureops.harness.provider_clients import (
+    model_configuration_status,
+    model_routes_from_environment,
+)
 from procureops.intake.prompts import PROMPT_SCOPE_TEXT_INTAKE
 from procureops.runtime import ProcureOpsRuntime
 from procureops.worker.service import ProcureOpsWorker
@@ -69,15 +82,44 @@ class PromptCandidateRequest(BaseModel):
     feedback_ids: tuple[str, ...] = Field(min_length=1, max_length=100)
 
 
+class LoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=256)
+    tenant_id: str = DEFAULT_TENANT
+
+
 def actor_from_headers(
-    x_tenant_id: Annotated[str, Header()] = DEFAULT_TENANT,
-    x_actor_id: Annotated[str, Header()] = "local-buyer",
-    x_actor_roles: Annotated[str, Header()] = "procurement_operator",
+    request: Request,
+    authorization: Annotated[str | None, Header()] = None,
+    x_tenant_id: Annotated[str | None, Header()] = None,
+    x_actor_id: Annotated[str | None, Header()] = None,
+    x_actor_roles: Annotated[str | None, Header()] = None,
 ) -> Actor:
-    roles = frozenset(role.strip() for role in x_actor_roles.split(",") if role.strip())
-    if not roles:
-        raise HTTPException(status_code=400, detail="at least one actor role is required")
-    return Actor(tenant_id=x_tenant_id.strip(), actor_id=x_actor_id.strip(), roles=roles)
+    if authorization and authorization.casefold().startswith("bearer "):
+        try:
+            identity = request.app.state.runtime.auth.resolve(
+                token=authorization.split(" ", 1)[1].strip()
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        return Actor(
+            tenant_id=identity.tenant_id,
+            actor_id=identity.user_id,
+            roles=identity.roles,
+        )
+    if request.app.state.allow_header_auth and all(
+        (x_tenant_id, x_actor_id, x_actor_roles)
+    ):
+        roles = frozenset(
+            role.strip() for role in str(x_actor_roles).split(",") if role.strip()
+        )
+        if roles:
+            return Actor(
+                tenant_id=str(x_tenant_id).strip(),
+                actor_id=str(x_actor_id).strip(),
+                roles=roles,
+            )
+    raise HTTPException(status_code=401, detail="bearer session required")
 
 
 def create_app(
@@ -85,6 +127,7 @@ def create_app(
     project_root: Path = PROJECT_ROOT,
     database_path: Path | None = None,
     var_root: Path | None = None,
+    allow_header_auth: bool = False,
 ) -> FastAPI:
     runtime = ProcureOpsRuntime.create(
         project_root=project_root,
@@ -93,13 +136,14 @@ def create_app(
     )
     app = FastAPI(
         title="ProcureOps Agent API",
-        version="0.3.0",
+        version="0.4.0",
         description=(
             "Task-first procurement workbench with governed memory, evolution, "
             "multi-agent experiments, and Harness controls."
         ),
     )
     app.state.runtime = runtime
+    app.state.allow_header_auth = allow_header_auth
     app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
 
     @app.get("/", include_in_schema=False)
@@ -110,6 +154,35 @@ def create_app(
     def health() -> dict[str, str]:
         return {"status": "ok", "storage": "sqlite", "worker": "durable-local"}
 
+    @app.post("/api/auth/login")
+    def login(request: LoginRequest) -> dict[str, Any]:
+        try:
+            session = runtime.auth.login(
+                email=request.email,
+                password=request.password,
+                tenant_id=request.tenant_id,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        return session.model_dump(mode="json")
+
+    @app.get("/api/auth/me")
+    def current_identity(
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        return {
+            "tenant_id": actor.tenant_id,
+            "actor_id": actor.actor_id,
+            "roles": sorted(actor.roles),
+        }
+
+    @app.post("/api/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+    def logout(
+        authorization: Annotated[str, Header()],
+        _actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> None:
+        runtime.auth.logout(token=authorization.split(" ", 1)[1].strip())
+
     @app.post("/api/tasks/text", status_code=status.HTTP_202_ACCEPTED)
     def create_text_task(
         request: TextTaskRequest,
@@ -117,7 +190,12 @@ def create_app(
     ) -> dict[str, Any]:
         _ensure_architecture_ready(request.architecture)
         task_id = str(uuid4())
-        runtime.repository.create_task(
+        job_payload = _job_payload(
+            actor=actor,
+            source={"kind": "text", "text": request.text, "artifact_id": task_id},
+            architecture=request.architecture,
+        )
+        _task, outbox_event_id, _upload_id = runtime.repository.create_task_with_outbox(
             tenant_id=actor.tenant_id,
             created_by=actor.actor_id,
             request={
@@ -127,19 +205,18 @@ def create_app(
             },
             workflow_version="1.0.0",
             task_id=task_id,
-        )
-        job, reused = runtime.queue.enqueue(
-            tenant_id=actor.tenant_id,
-            task_id=task_id,
-            job_type="process_intake",
-            payload=_job_payload(
-                actor=actor,
-                source={"kind": "text", "text": request.text, "artifact_id": task_id},
-                architecture=request.architecture,
-            ),
+            job_payload=job_payload,
             idempotency_key=f"intake:{task_id}:v1",
         )
-        return {"task_id": task_id, "job_id": job.job_id, "reused": reused}
+        job = runtime.outbox.dispatch(event_id=outbox_event_id)
+        if job is None:
+            raise HTTPException(status_code=503, detail="outbox delivery is pending")
+        return {
+            "task_id": task_id,
+            "job_id": job.job_id,
+            "outbox_event_id": outbox_event_id,
+            "reused": False,
+        }
 
     @app.post("/api/tasks/upload", status_code=status.HTTP_202_ACCEPTED)
     async def create_upload_task(
@@ -153,17 +230,6 @@ def create_app(
         data = await file.read(runtime.blobs.max_bytes + 1)
         if len(data) > runtime.blobs.max_bytes:
             raise HTTPException(status_code=413, detail="upload exceeds 10 MiB")
-        runtime.repository.create_task(
-            tenant_id=actor.tenant_id,
-            created_by=actor.actor_id,
-            request={
-                "source_type": "upload",
-                "filename": file.filename,
-                "architecture": architecture,
-            },
-            workflow_version="1.0.0",
-            task_id=task_id,
-        )
         try:
             stored = runtime.blobs.save(
                 tenant_id=actor.tenant_id,
@@ -174,32 +240,41 @@ def create_app(
             )
         except ValueError as exc:
             raise HTTPException(status_code=415, detail=str(exc)) from exc
-        upload_id = runtime.repository.add_upload(
-            tenant_id=actor.tenant_id,
-            task_id=task_id,
-            original_filename=stored.original_filename,
-            storage_key=stored.storage_key,
-            content_type=stored.content_type,
-            size_bytes=stored.size_bytes,
-            sha256=stored.sha256,
+        job_payload = _job_payload(
+            actor=actor,
+            source={"kind": "upload", "storage_key": stored.storage_key},
+            architecture=architecture,
         )
-        job, reused = runtime.queue.enqueue(
+        _task, outbox_event_id, upload_id = runtime.repository.create_task_with_outbox(
             tenant_id=actor.tenant_id,
+            created_by=actor.actor_id,
+            request={
+                "source_type": "upload",
+                "filename": file.filename,
+                "architecture": architecture,
+            },
+            workflow_version="1.0.0",
             task_id=task_id,
-            job_type="process_intake",
-            payload=_job_payload(
-                actor=actor,
-                source={"kind": "upload", "storage_key": stored.storage_key},
-                architecture=architecture,
-            ),
+            job_payload=job_payload,
             idempotency_key=f"intake:{task_id}:v1",
+            upload={
+                "original_filename": stored.original_filename,
+                "storage_key": stored.storage_key,
+                "content_type": stored.content_type,
+                "size_bytes": stored.size_bytes,
+                "sha256": stored.sha256,
+            },
         )
+        job = runtime.outbox.dispatch(event_id=outbox_event_id)
+        if job is None:
+            raise HTTPException(status_code=503, detail="outbox delivery is pending")
         return {
             "task_id": task_id,
             "job_id": job.job_id,
             "upload_id": upload_id,
+            "outbox_event_id": outbox_event_id,
             "sha256": stored.sha256,
-            "reused": reused,
+            "reused": False,
         }
 
     @app.get("/api/tasks")
@@ -228,11 +303,11 @@ def create_app(
         if TaskStatus(task.status) is not TaskStatus.NEEDS_INPUT:
             raise HTTPException(status_code=409, detail="task is not waiting for input")
         next_version = task.version + 1
-        job, reused = runtime.queue.enqueue(
+        outbox_event_id, reused = runtime.outbox.stage_work(
             tenant_id=actor.tenant_id,
             task_id=task_id,
             job_type="process_intake",
-            payload=_job_payload(
+            job_payload=_job_payload(
                 actor=actor,
                 source={
                     "kind": "text",
@@ -243,13 +318,21 @@ def create_app(
             ),
             idempotency_key=f"answer:{task_id}:v{next_version}",
         )
+        job = runtime.outbox.dispatch(event_id=outbox_event_id)
+        if job is None:
+            raise HTTPException(status_code=503, detail="outbox delivery is pending")
         runtime.repository.append_workflow_event(
             tenant_id=actor.tenant_id,
             task_id=task_id,
             event_type="user.input_supplied",
             payload={"actor_id": actor.actor_id, "answer_length": len(request.text)},
         )
-        return {"task_id": task_id, "job_id": job.job_id, "reused": reused}
+        return {
+            "task_id": task_id,
+            "job_id": job.job_id,
+            "outbox_event_id": outbox_event_id,
+            "reused": reused,
+        }
 
     @app.post("/api/tasks/{task_id}/approval", status_code=status.HTTP_202_ACCEPTED)
     def decide_approval(
@@ -260,6 +343,21 @@ def create_app(
         task = _get_task(runtime, actor=actor, task_id=task_id)
         if TaskStatus(task.status) is not TaskStatus.AWAITING_APPROVAL:
             raise HTTPException(status_code=409, detail="task is not awaiting approval")
+        if runtime.repository.task_created_by(
+            tenant_id=actor.tenant_id,
+            task_id=task_id,
+        ) == actor.actor_id:
+            raise HTTPException(
+                status_code=403,
+                detail="maker-checker violation: task creator cannot approve or reject",
+            )
+        approval_event = _latest_approval_event(runtime, actor=actor, task_id=task_id)
+        approval_payload = json.loads(approval_event["payload_json"])
+        requirement = ApprovalRequirement.model_validate(
+            approval_payload["approval_requirement"]
+        )
+        if not requirement.required_roles.issubset(actor.roles):
+            raise HTTPException(status_code=403, detail="required approval role missing")
         if request.decision == "reject":
             rejected = runtime.repository.transition_task(
                 tenant_id=actor.tenant_id,
@@ -279,9 +377,6 @@ def create_app(
             )
             return {"task_id": task_id, "status": rejected.status, "decision": "reject"}
 
-        approval_event = _latest_approval_event(runtime, actor=actor, task_id=task_id)
-        approval_payload = json.loads(approval_event["payload_json"])
-        requirement = ApprovalRequirement.model_validate(approval_payload["approval_requirement"])
         result = WorkflowResult(
             task_id=task_id,
             status=TaskStatus.AWAITING_APPROVAL,
@@ -305,11 +400,11 @@ def create_app(
             )
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
-        job, reused = runtime.queue.enqueue(
+        outbox_event_id, reused = runtime.outbox.stage_work(
             tenant_id=actor.tenant_id,
             task_id=task_id,
             job_type="resume_approval",
-            payload={
+            job_payload={
                 "actor_id": "local-worker",
                 "actor_roles": ["procurement_operator"],
                 "architecture": str(task.request.get("architecture", "single")),
@@ -317,10 +412,14 @@ def create_app(
             },
             idempotency_key=f"approval:{grant.approval_id}",
         )
+        job = runtime.outbox.dispatch(event_id=outbox_event_id)
+        if job is None:
+            raise HTTPException(status_code=503, detail="outbox delivery is pending")
         return {
             "task_id": task_id,
             "job_id": job.job_id,
             "approval_id": grant.approval_id,
+            "outbox_event_id": outbox_event_id,
             "reused": reused,
         }
 
@@ -332,6 +431,13 @@ def create_app(
             raise HTTPException(status_code=403, detail="procurement_operator role required")
         outcome = ProcureOpsWorker(runtime=runtime, worker_id="api-local-worker").run_once()
         return {"processed": outcome is not None, "outcome": outcome}
+
+    @app.get("/api/admin/outbox")
+    def outbox_status(
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        _require_role(actor, "procurement_operator")
+        return {"items": list(runtime.outbox.events(tenant_id=actor.tenant_id))}
 
     @app.get("/api/tasks/{task_id}/po")
     def task_po(
@@ -406,6 +512,10 @@ def create_app(
             "live_models_enabled": _live_models_enabled(),
             "text": model_configuration_status(kind="text"),
             "vision": model_configuration_status(kind="vision"),
+            "routes": {
+                kind: _public_model_routes(kind)
+                for kind in ("text", "vision")
+            },
             "qwen_switch": {
                 "text_provider_value": "qwen",
                 "vision_provider_value": "qwen",
@@ -423,7 +533,15 @@ def create_app(
             user_id=actor.actor_id,
             status=memory_status,
         )
-        return {"items": [item.model_dump(mode="json") for item in records]}
+        return {
+            "items": [item.model_dump(mode="json") for item in records],
+            "access_events": list(
+                runtime.memory.access_events(
+                    tenant_id=actor.tenant_id,
+                    user_id=actor.actor_id,
+                )
+            ),
+        }
 
     @app.post("/api/memory/candidates", status_code=status.HTTP_201_CREATED)
     def propose_memory(
@@ -671,6 +789,21 @@ def _live_models_enabled() -> bool:
     import os
 
     return os.environ.get("PROCUREOPS_ENABLE_LIVE_MODELS", "0") == "1"
+
+
+def _public_model_routes(kind: str) -> list[dict[str, str]]:
+    try:
+        routes = model_routes_from_environment(kind=kind)
+    except RuntimeError:
+        return []
+    return [
+        {
+            "route": route.name,
+            "provider": route.client.provider,
+            "model": route.client.model,
+        }
+        for route in routes
+    ]
 
 
 def _clean_task_row(row: dict[str, Any]) -> dict[str, Any]:

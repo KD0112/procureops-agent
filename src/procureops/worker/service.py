@@ -14,8 +14,7 @@ from procureops.harness.audit import (
 )
 from procureops.harness.budget import RunBudgetLedger
 from procureops.harness.errors import PermanentToolError, TransientToolError
-from procureops.harness.model_gateway import ModelGateway
-from procureops.harness.provider_clients import client_from_environment
+from procureops.harness.provider_clients import routed_gateway_from_environment
 from procureops.intake import IntakeService
 from procureops.intake.model_extractors import GatewayTextExtractor, GatewayVisionExtractor
 from procureops.memory import detect_preference_candidates
@@ -29,6 +28,7 @@ class ProcureOpsWorker:
         self.worker_id = worker_id or f"local-worker-{uuid4().hex[:8]}"
 
     def run_once(self) -> dict[str, Any] | None:
+        self.runtime.outbox.dispatch_pending()
         job = self.runtime.queue.claim(worker_id=self.worker_id)
         if job is None:
             return None
@@ -163,8 +163,8 @@ class ProcureOpsWorker:
                 tenant_id=context.tenant_id
             )
             text_extractor = GatewayTextExtractor(
-                gateway=ModelGateway(
-                    client=client_from_environment(kind="text"),
+                gateway=routed_gateway_from_environment(
+                    kind="text",
                     audit=audit,
                 ),
                 context=context,
@@ -173,8 +173,8 @@ class ProcureOpsWorker:
             )
         elif source_mode == "vision":
             vision_extractor = GatewayVisionExtractor(
-                gateway=ModelGateway(
-                    client=client_from_environment(kind="vision"),
+                gateway=routed_gateway_from_environment(
+                    kind="vision",
                     audit=audit,
                 ),
                 context=context,

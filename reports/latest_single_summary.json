@@ -1,7 +1,7 @@
 {
   "architecture": "single",
   "average_evidence_coverage": 0.80375,
-  "average_tool_calls": 2.32,
+  "average_tool_calls": 2.98,
   "category_metrics": {
     "ambiguous": {
       "average_evidence_coverage": 0.5,
@@ -41,8 +41,8 @@
     "AuthorizationDenied": 7,
     "PermanentToolError": 7
   },
-  "latency_p50_ms": 233.948,
-  "latency_p95_ms": 262.995,
+  "latency_p50_ms": 223.418,
+  "latency_p95_ms": 256.809,
   "outcome_taxonomy": {
     "blocked": 7,
     "completed": 66,

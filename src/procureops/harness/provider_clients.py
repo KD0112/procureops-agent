@@ -9,8 +9,10 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from procureops.config import load_environment
+from procureops.harness.audit import AuditSink
 from procureops.harness.errors import PermanentToolError, TransientToolError
 from procureops.harness.model_gateway import ModelRequest, ModelResponse
+from procureops.harness.model_router import ModelRoute, RoutedModelGateway
 
 
 class JsonTransport(Protocol):
@@ -202,6 +204,58 @@ def model_configuration_status(*, kind: str) -> dict[str, Any]:
         "model": client.model,
         "configured": True,
     }
+
+
+def model_routes_from_environment(*, kind: str) -> tuple[ModelRoute, ...]:
+    """Build only configured routes; Qwen becomes primary as soon as its key exists."""
+
+    load_environment()
+    configured_primary = os.environ.get(
+        f"AGENT_{kind.upper()}_PROVIDER",
+        "deepseek" if kind == "text" else "zhipu",
+    ).casefold()
+    default_route = (
+        ("qwen", configured_primary, "deepseek")
+        if kind == "text"
+        else ("qwen", configured_primary, "zhipu")
+    )
+    raw_route = os.environ.get(f"AGENT_{kind.upper()}_ROUTE")
+    providers = (
+        tuple(item.strip().casefold() for item in raw_route.split(",") if item.strip())
+        if raw_route
+        else default_route
+    )
+    routes: list[ModelRoute] = []
+    seen: set[str] = set()
+    for provider in providers:
+        normalized = "qwen" if provider in {"dashscope", "alibaba"} else provider
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        try:
+            client = client_from_environment(kind=kind, provider_override=normalized)
+        except RuntimeError:
+            continue
+        routes.append(
+            ModelRoute(
+                name=f"{kind}:{client.provider}:{client.model}",
+                client=client,
+            )
+        )
+    if not routes:
+        raise RuntimeError(f"no configured {kind} model route")
+    return tuple(routes)
+
+
+def routed_gateway_from_environment(
+    *,
+    kind: str,
+    audit: AuditSink,
+) -> RoutedModelGateway:
+    return RoutedModelGateway(
+        routes=model_routes_from_environment(kind=kind),
+        audit=audit,
+    )
 
 
 def _parse_json_content(content: Any) -> dict[str, Any]:

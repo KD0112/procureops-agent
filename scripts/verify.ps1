@@ -32,3 +32,6 @@ Invoke-Checked -Label "Ruff" -Command {
 Invoke-Checked -Label "Pytest" -Command {
     & $Python -m pytest --cov=procureops --cov-report=term-missing:skip-covered --cov-fail-under=90
 }
+Invoke-Checked -Label "SQLite enterprise verification" -Command {
+    & $Python scripts/verify_enterprise_depth.py
+}
