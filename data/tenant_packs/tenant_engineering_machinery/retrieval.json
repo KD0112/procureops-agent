@@ -1,0 +1,14 @@
+{
+  "retrieval_config_version": "1.0.0",
+  "tenant_id": "tenant_engineering_machinery",
+  "allowed_statuses": ["approved"],
+  "allowed_classifications": ["internal"],
+  "top_k": 6,
+  "minimum_score": 0.65,
+  "require_citations": true,
+  "deny_dynamic_facts": true,
+  "hybrid_weights": {
+    "semantic": 0.7,
+    "keyword": 0.3
+  }
+}

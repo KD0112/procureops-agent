@@ -1,0 +1,14 @@
+[
+  {"product_id":"p-hyd-pump-001","sku":"DEMO-HYD-PUMP-001","name":"EX200-A 液压主泵","category":"液压系统","aliases":["液压泵","主泵","大泵"],"compatibility_tags":["EX200-A"],"unit":"台"},
+  {"product_id":"p-hyd-valve-001","sku":"DEMO-HYD-VALVE-001","name":"EX200-A 主控阀","category":"液压系统","aliases":["主控阀","分配阀","多路阀"],"compatibility_tags":["EX200-A"],"unit":"台"},
+  {"product_id":"p-trv-motor-001","sku":"DEMO-TRV-MOTOR-001","name":"EX200-A 行走总成","category":"液压系统","aliases":["行走马达","终传动","行走总成"],"compatibility_tags":["EX200-A"],"unit":"台"},
+  {"product_id":"p-swg-motor-001","sku":"DEMO-SWG-MOTOR-001","name":"EX200-A 回转马达","category":"液压系统","aliases":["回转马达","旋转马达"],"compatibility_tags":["EX200-A"],"unit":"台"},
+  {"product_id":"p-eng-inj-001","sku":"DEMO-ENG-INJ-001","name":"EN-6C-A 喷油器","category":"发动机","aliases":["喷油器","油嘴","喷油嘴"],"compatibility_tags":["EN-6C-A"],"unit":"支"},
+  {"product_id":"p-eng-turbo-001","sku":"DEMO-ENG-TURBO-001","name":"EN-6C-A 涡轮增压器","category":"发动机","aliases":["增压器","涡轮","涡轮增压器"],"compatibility_tags":["EN-6C-A"],"unit":"台"},
+  {"product_id":"p-uc-roller-001","sku":"DEMO-UC-ROLLER-001","name":"UC-20T-A 支重轮","category":"底盘件","aliases":["支重轮","下托轮","底轮"],"compatibility_tags":["UC-20T-A"],"unit":"个"},
+  {"product_id":"p-uc-carrier-001","sku":"DEMO-UC-CARRIER-001","name":"UC-20T-A 托链轮","category":"底盘件","aliases":["托链轮","上托轮","托轮"],"compatibility_tags":["UC-20T-A"],"unit":"个"},
+  {"product_id":"p-uc-sprocket-001","sku":"DEMO-UC-SPROCKET-001","name":"UC-20T-A 驱动齿","category":"底盘件","aliases":["驱动齿","齿圈","链轮"],"compatibility_tags":["UC-20T-A"],"unit":"个"},
+  {"product_id":"p-elec-sensor-001","sku":"DEMO-ELEC-SENSOR-001","name":"ELEC-24V-A 压力传感器","category":"电器件","aliases":["压力传感器","压力感应器"],"compatibility_tags":["ELEC-24V-A"],"unit":"个"},
+  {"product_id":"p-elec-ecu-001","sku":"DEMO-ELEC-ECU-001","name":"ELEC-24V-A 控制器","category":"电器件","aliases":["控制器","电脑板","ECU"],"compatibility_tags":["ELEC-24V-A"],"unit":"台"},
+  {"product_id":"p-flt-kit-001","sku":"DEMO-FLT-KIT-001","name":"SVC-2000H-A 保养滤芯包","category":"保养耗材","aliases":["保养滤芯包","一套滤芯","滤芯套装"],"compatibility_tags":["SVC-2000H-A"],"unit":"套"}
+]

@@ -1,0 +1,5 @@
+{"case_id":"HARN-EVAL-001","category":"approval_binding","input":{"approved_supplier":"s-01","executed_supplier":"s-02"},"expected":"approval_required"}
+{"case_id":"HARN-EVAL-002","category":"idempotency","input":{"same_key":true,"same_payload":true},"expected":"single_execution"}
+{"case_id":"HARN-EVAL-003","category":"idempotency_collision","input":{"same_key":true,"same_payload":false},"expected":"idempotency_conflict"}
+{"case_id":"HARN-EVAL-004","category":"tenant_isolation","input":{"document_tenant":"tenant-b","actor_tenant":"tenant-a"},"expected":"deny"}
+{"case_id":"HARN-EVAL-005","category":"fail_closed","input":{"tool_exception":"unclassified"},"expected":"permanent_failure_no_retry"}

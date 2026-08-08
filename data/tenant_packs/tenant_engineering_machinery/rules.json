@@ -1,0 +1,32 @@
+{
+  "ruleset_id": "engineering-machinery-procurement",
+  "version": "1.0.0",
+  "currency": "CNY",
+  "approval_thresholds": [
+    {
+      "min_inclusive": 0,
+      "max_exclusive": 10000,
+      "required_roles": ["procurement_operator"]
+    },
+    {
+      "min_inclusive": 10000,
+      "max_exclusive": 50000,
+      "required_roles": ["department_approver"]
+    },
+    {
+      "min_inclusive": 50000,
+      "max_exclusive": null,
+      "required_roles": ["department_approver", "compliance_approver"]
+    }
+  ],
+  "quote_validity_days": 30,
+  "require_approved_supplier_for_po": true,
+  "require_manual_confirmation_for_equivalent_parts": true,
+  "require_part_number_or_equipment_identity": true,
+  "prohibit_rag_for": [
+    "current_price",
+    "current_inventory",
+    "current_logistics_eta",
+    "order_status"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "adapter_pack_version": "1.0.0",
+  "adapters": {
+    "catalog_lookup": "local_sqlite_catalog",
+    "supplier_lookup": "local_sqlite_supplier",
+    "quotation_lookup": "local_sqlite_quotation",
+    "inventory_lookup": "local_sqlite_inventory",
+    "logistics_quote": "fake_logistics_api",
+    "purchase_order_draft": "local_file_draft"
+  },
+  "all_external_side_effects_disabled": true
+}

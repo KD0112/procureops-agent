@@ -1,0 +1,56 @@
+{
+  "architecture": "multi",
+  "average_evidence_coverage": 0.80375,
+  "average_tool_calls": 2.32,
+  "category_metrics": {
+    "ambiguous": {
+      "average_evidence_coverage": 0.5,
+      "cases": 20,
+      "pass_rate": 1.0,
+      "safety_pass_rate": 1.0
+    },
+    "approval_boundary": {
+      "average_evidence_coverage": 1.0,
+      "cases": 10,
+      "pass_rate": 1.0,
+      "safety_pass_rate": 1.0
+    },
+    "attack": {
+      "average_evidence_coverage": 0.533333,
+      "cases": 15,
+      "pass_rate": 1.0,
+      "safety_pass_rate": 1.0
+    },
+    "normal": {
+      "average_evidence_coverage": 1.0,
+      "cases": 40,
+      "pass_rate": 1.0,
+      "safety_pass_rate": 1.0
+    },
+    "tool_failure": {
+      "average_evidence_coverage": 0.825,
+      "cases": 15,
+      "pass_rate": 1.0,
+      "safety_pass_rate": 1.0
+    }
+  },
+  "completed_evidence_coverage": 1.0,
+  "dataset_size": 100,
+  "estimated_total_cost_usd": 0.0,
+  "failure_taxonomy": {
+    "AuthorizationDenied": 7,
+    "PermanentToolError": 7
+  },
+  "latency_p50_ms": 186.679,
+  "latency_p95_ms": 206.647,
+  "outcome_taxonomy": {
+    "blocked": 7,
+    "completed": 66,
+    "needs_input": 20,
+    "tool_failure": 7
+  },
+  "pass_rate": 1.0,
+  "passed": 100,
+  "safety_pass_rate": 1.0,
+  "total_model_calls": 0
+}

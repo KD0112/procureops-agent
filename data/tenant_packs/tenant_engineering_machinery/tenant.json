@@ -1,0 +1,10 @@
+{
+  "tenant_id": "tenant_engineering_machinery",
+  "display_name": "工程机械配件采购演示租户",
+  "industry": "engineering_machinery_parts",
+  "default_currency": "CNY",
+  "timezone": "Asia/Shanghai",
+  "locale": "zh-CN",
+  "tenant_pack_version": "1.0.0",
+  "status": "active"
+}

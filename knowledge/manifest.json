@@ -1,0 +1,133 @@
+{
+  "manifest_version": "1.0.0",
+  "documents": [
+    {
+      "document_id": "EM-POL-APPROVAL-001",
+      "tenant_id": "tenant_engineering_machinery",
+      "version": "1.0.0",
+      "classification": "internal",
+      "allowed_roles": [
+        "procurement_operator",
+        "procurement_specialist",
+        "department_approver",
+        "compliance_approver",
+        "compliance_officer",
+        "tenant_admin",
+        "auditor"
+      ],
+      "path": "knowledge/tenant_engineering_machinery/policies/approval_policy.md",
+      "sha256": "91ce17065af56c4445ae2c6d9ceb1b709fc11494f73b3b4cfa383e6899826c0e"
+    },
+    {
+      "document_id": "EM-POL-EVIDENCE-001",
+      "tenant_id": "tenant_engineering_machinery",
+      "version": "1.0.0",
+      "classification": "internal",
+      "allowed_roles": [
+        "procurement_operator",
+        "procurement_specialist",
+        "department_approver",
+        "compliance_approver",
+        "compliance_officer",
+        "auditor"
+      ],
+      "path": "knowledge/tenant_engineering_machinery/policies/evidence_audit_policy.md",
+      "sha256": "ba886363baf12ee3bea54684a44f2f19b1dd6757503a4338e16a69ae3f77fa43"
+    },
+    {
+      "document_id": "EM-POL-MEMORY-001",
+      "tenant_id": "tenant_engineering_machinery",
+      "version": "1.0.0",
+      "classification": "internal",
+      "allowed_roles": [
+        "requester",
+        "procurement_operator",
+        "procurement_specialist",
+        "tenant_admin",
+        "auditor"
+      ],
+      "path": "knowledge/tenant_engineering_machinery/policies/memory_governance_policy.md",
+      "sha256": "be92197731734517ebf9899f6afb868b75f4bcdcb0e19efd81605ad3177fe4d5"
+    },
+    {
+      "document_id": "EM-POL-PROCUREMENT-001",
+      "tenant_id": "tenant_engineering_machinery",
+      "version": "1.0.0",
+      "classification": "internal",
+      "allowed_roles": [
+        "requester",
+        "procurement_operator",
+        "procurement_specialist",
+        "department_approver",
+        "compliance_approver",
+        "compliance_officer",
+        "auditor"
+      ],
+      "path": "knowledge/tenant_engineering_machinery/policies/procurement_policy.md",
+      "sha256": "8da22d0a3ca282c0e1c9afd3df9745f938e925565543c8c86ab6915476f2ce7f"
+    },
+    {
+      "document_id": "EM-POL-QUOTE-001",
+      "tenant_id": "tenant_engineering_machinery",
+      "version": "1.0.0",
+      "classification": "internal",
+      "allowed_roles": [
+        "procurement_operator",
+        "procurement_specialist",
+        "department_approver",
+        "compliance_approver",
+        "compliance_officer",
+        "auditor"
+      ],
+      "path": "knowledge/tenant_engineering_machinery/policies/quotation_freshness_policy.md",
+      "sha256": "208d90e40c60cd137b0d6a3d14cfa638088a31b445d80606e0198347a72cd73c"
+    },
+    {
+      "document_id": "EM-POL-SUPPLIER-001",
+      "tenant_id": "tenant_engineering_machinery",
+      "version": "1.0.0",
+      "classification": "internal",
+      "allowed_roles": [
+        "procurement_operator",
+        "procurement_specialist",
+        "department_approver",
+        "compliance_approver",
+        "compliance_officer",
+        "supplier_manager",
+        "auditor"
+      ],
+      "path": "knowledge/tenant_engineering_machinery/policies/supplier_governance_policy.md",
+      "sha256": "74bbd89dbc7c32c2ed01c41ba2a3ca24d2d6c13f38c4c59d1ac21e9563316f8b"
+    },
+    {
+      "document_id": "EM-GUIDE-CATALOG-001",
+      "tenant_id": "tenant_engineering_machinery",
+      "version": "1.0.0",
+      "classification": "internal",
+      "allowed_roles": [
+        "requester",
+        "procurement_operator",
+        "procurement_specialist",
+        "catalog_manager",
+        "auditor"
+      ],
+      "path": "knowledge/tenant_engineering_machinery/product_guides/catalog_matching_guide.md",
+      "sha256": "3e320f0e1b012895eedec586a91f1f03064993cd7fa95b983dc08a6c74fa89d2"
+    },
+    {
+      "document_id": "EM-GUIDE-COMPAT-001",
+      "tenant_id": "tenant_engineering_machinery",
+      "version": "1.0.0",
+      "classification": "internal",
+      "allowed_roles": [
+        "requester",
+        "procurement_operator",
+        "procurement_specialist",
+        "catalog_manager",
+        "auditor"
+      ],
+      "path": "knowledge/tenant_engineering_machinery/product_guides/synthetic_compatibility_reference.md",
+      "sha256": "c5e6113802f10c894407ca8f0cd701f5771e64155733bcdc9b714350240f7bab"
+    }
+  ]
+}
