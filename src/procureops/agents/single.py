@@ -65,17 +65,25 @@ class SingleAgentWorkflow:
         context: RunContext,
         intake: IntakeResult,
     ) -> WorkflowResult:
-        task = self.repository.create_task(
-            tenant_id=context.tenant_id,
-            created_by=context.actor_id,
-            request={
-                "artifact_id": intake.artifact_id,
-                "source_type": intake.source_type,
-                "source_sha256": intake.source_sha256,
-            },
-            workflow_version=context.workflow_version,
-            task_id=context.task_id,
-        )
+        try:
+            task = self.repository.get_task(
+                tenant_id=context.tenant_id,
+                task_id=context.task_id,
+            )
+        except KeyError:
+            task = self.repository.create_task(
+                tenant_id=context.tenant_id,
+                created_by=context.actor_id,
+                request={
+                    "artifact_id": intake.artifact_id,
+                    "source_type": intake.source_type,
+                    "source_sha256": intake.source_sha256,
+                },
+                workflow_version=context.workflow_version,
+                task_id=context.task_id,
+            )
+        if TaskStatus(task.status) not in {TaskStatus.DRAFT, TaskStatus.NEEDS_INPUT}:
+            raise ValueError(f"task cannot accept new intake from status {task.status}")
         self._emit(
             "intake",
             {"line_count": len(intake.lines), "questions": list(intake.questions)},

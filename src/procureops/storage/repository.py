@@ -177,6 +177,76 @@ class ProcureOpsRepository:
             )
         return self.get_task(tenant_id=tenant_id, task_id=task_id)
 
+    def list_tasks(
+        self,
+        *,
+        tenant_id: str,
+        limit: int = 100,
+    ) -> tuple[dict[str, Any], ...]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT task_id, tenant_id, created_by, status, request_json,
+                       workflow_version, version, created_at, updated_at
+                FROM procurement_tasks
+                WHERE tenant_id=? ORDER BY updated_at DESC LIMIT ?
+                """,
+                (tenant_id, limit),
+            ).fetchall()
+        return tuple(
+            {**dict(row), "request": json.loads(row["request_json"])} for row in rows
+        )
+
+    def add_upload(
+        self,
+        *,
+        tenant_id: str,
+        task_id: str,
+        original_filename: str,
+        storage_key: str,
+        content_type: str,
+        size_bytes: int,
+        sha256: str,
+    ) -> str:
+        upload_id = str(uuid4())
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                INSERT INTO task_uploads(
+                    upload_id, tenant_id, task_id, original_filename,
+                    storage_key, content_type, size_bytes, sha256, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    upload_id,
+                    tenant_id,
+                    task_id,
+                    original_filename,
+                    storage_key,
+                    content_type,
+                    size_bytes,
+                    sha256,
+                    utc_now().isoformat(),
+                ),
+            )
+        return upload_id
+
+    def uploads_for_task(
+        self,
+        *,
+        tenant_id: str,
+        task_id: str,
+    ) -> tuple[dict[str, Any], ...]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM task_uploads
+                WHERE tenant_id=? AND task_id=? ORDER BY created_at
+                """,
+                (tenant_id, task_id),
+            ).fetchall()
+        return tuple(dict(row) for row in rows)
+
     def get_task(self, *, tenant_id: str, task_id: str) -> TaskSnapshot:
         with self.database.connect() as connection:
             row = connection.execute(

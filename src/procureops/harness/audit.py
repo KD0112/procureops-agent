@@ -51,6 +51,17 @@ class AuditSink(Protocol):
     def append(self, event: AuditEvent) -> None: ...
 
 
+class CompositeAuditSink:
+    def __init__(self, *sinks: AuditSink) -> None:
+        if not sinks:
+            raise ValueError("at least one audit sink is required")
+        self.sinks = sinks
+
+    def append(self, event: AuditEvent) -> None:
+        for sink in self.sinks:
+            sink.append(event)
+
+
 class InMemoryAuditSink:
     def __init__(self) -> None:
         self._events: list[AuditEvent] = []
@@ -77,4 +88,3 @@ class JsonlAuditSink:
         serialized = json.dumps(event.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
         with self._lock, self.path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(serialized + "\n")
-

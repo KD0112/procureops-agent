@@ -57,3 +57,26 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 - `docs/implementation-status.md`
 - `docs/demo-guide.md`
 - `docs/evaluation-results.md`
+
+## Local task workbench (v0.2)
+
+```powershell
+& ".\.venv\Scripts\python.exe" scripts\run_api.py
+# Open http://127.0.0.1:8000
+```
+
+The UI, API and worker share the same SQLite repository, state machine, durable queue and Harness. Use the workbench button to process one job at a time, or run a continuous worker in another terminal:
+
+```powershell
+& ".\.venv\Scripts\python.exe" scripts\run_worker.py --loop
+```
+
+Paid/live models remain opt-in. The normal verification path is fully offline:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
+& ".\.venv\Scripts\python.exe" scripts\run_live_model_eval.py --limit 10
+& ".\.venv\Scripts\python.exe" scripts\run_live_vision_smoke.py
+```
+
+Interview assets are under `demo_assets/`; the eight-minute walkthrough is `docs/interview/demo-script.md`.

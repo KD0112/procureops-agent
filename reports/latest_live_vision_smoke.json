@@ -1,0 +1,22 @@
+{
+  "cost_usd": 0.0,
+  "created_at": "2026-08-08T05:54:01.339687+00:00",
+  "extracted": [
+    {
+      "allow_equivalent": false,
+      "description": "24V PRESSURE SENSOR",
+      "equipment_model": "ELEC-24V-A",
+      "line_number": 1,
+      "part_number": "DEMO-ELEC-SENSOR-001",
+      "quantity": "4",
+      "unit": "PCS"
+    }
+  ],
+  "input_sha256": "d3a4de90e3171c949e9eb8754f938a012e31616710e4e2a1239143753e01df56",
+  "latency_ms": 9135.7,
+  "model": "glm-4.1v-thinking-flash",
+  "passed": true,
+  "provider": "zhipu",
+  "suite": "live_vision_smoke_v1",
+  "tokens": 2531
+}

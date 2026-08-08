@@ -1,0 +1,245 @@
+{
+  "case_count": 10,
+  "created_at": "2026-08-08T05:44:21.709911+00:00",
+  "mean_latency_ms": 4164.1,
+  "model": "deepseek-v4-flash",
+  "p95_latency_ms": 7423.9,
+  "pass_rate": 1.0,
+  "passed": 10,
+  "provider": "deepseek",
+  "results": [
+    {
+      "case_id": "live-001",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "液压主泵",
+          "equipment_model": "EX200-A",
+          "line_number": 1,
+          "part_number": "DEMO-HYD-PUMP-001",
+          "quantity": "2",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "451ed21db59a7943cd006779ed8d3886a7b7ddba5820400975037c56419be682",
+      "input_tokens": 464,
+      "latency_ms": 2136.6,
+      "passed": true,
+      "tags": [
+        "natural_language"
+      ]
+    },
+    {
+      "case_id": "live-002",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "滤芯包",
+          "equipment_model": "SVC-2000H-A",
+          "line_number": 1,
+          "part_number": "DEMO-FLT-KIT-001",
+          "quantity": "10",
+          "unit": "套"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "36cad55e7eca5506b357ec313f2a4de6d2000741dc0c01858d6b89fa45589698",
+      "input_tokens": 814,
+      "latency_ms": 5788.9,
+      "passed": true,
+      "tags": [
+        "natural_language"
+      ]
+    },
+    {
+      "case_id": "live-003",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": true,
+          "description": "喷油器",
+          "equipment_model": "EN-6C-A",
+          "line_number": 1,
+          "part_number": "DEMO-ENG-INJ-001",
+          "quantity": "3",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "4061ed833632602d2a9f2e5367a5b2a97e94e4c911ba2093fba3e8a1c12ae8c4",
+      "input_tokens": 588,
+      "latency_ms": 3450.7,
+      "passed": true,
+      "tags": [
+        "preference"
+      ]
+    },
+    {
+      "case_id": "live-004",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "行走总成",
+          "equipment_model": "EX200-A",
+          "line_number": 1,
+          "part_number": "DEMO-TRV-MOTOR-001",
+          "quantity": "1",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "b2036e5cd8ff393334dfe4a04b7bdb1bbaa7b5555e898fcbd1849c68a146b113",
+      "input_tokens": 707,
+      "latency_ms": 4250.0,
+      "passed": true,
+      "tags": [
+        "equipment_identity"
+      ]
+    },
+    {
+      "case_id": "live-005",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "24V pressure sensor",
+          "equipment_model": null,
+          "line_number": 1,
+          "part_number": "DEMO-ELEC-SENSOR-001",
+          "quantity": "4",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "df37e6893f0d672378e9d900cc5280cc4f70801ec9539ed13b5cb65c9eda8001",
+      "input_tokens": 891,
+      "latency_ms": 5623.7,
+      "passed": true,
+      "tags": [
+        "urgency"
+      ]
+    },
+    {
+      "case_id": "live-006",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "回转马达",
+          "equipment_model": "EX200-A",
+          "line_number": 1,
+          "part_number": "DEMO-SWG-MOTOR-001",
+          "quantity": "2",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "8084d1c281791e5e1c9439082967d36ac99fc5fb90577474b84117ec819de5b6",
+      "input_tokens": 522,
+      "latency_ms": 2455.4,
+      "passed": true,
+      "tags": [
+        "parentheses"
+      ]
+    },
+    {
+      "case_id": "live-007",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "支重轮",
+          "equipment_model": "UC-20T-A",
+          "line_number": 1,
+          "part_number": "DEMO-UC-ROLLER-001",
+          "quantity": "6",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "9d2086ebb49ee07be774248e55c4d75531c885a383af221778397629b4309c49",
+      "input_tokens": 523,
+      "latency_ms": 2509.1,
+      "passed": true,
+      "tags": [
+        "punctuation"
+      ]
+    },
+    {
+      "case_id": "live-008",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "托链轮",
+          "equipment_model": "UC-20T-A",
+          "line_number": 1,
+          "part_number": "DEMO-UC-CARRIER-001",
+          "quantity": "5",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "ea019596c52de4a69e09e6c2cd88e66e5bc70295abdc6d85d0c8df90a725b14d",
+      "input_tokens": 841,
+      "latency_ms": 5003.7,
+      "passed": true,
+      "tags": [
+        "alias"
+      ]
+    },
+    {
+      "case_id": "live-009",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "控制器",
+          "equipment_model": null,
+          "line_number": 1,
+          "part_number": "DEMO-ELEC-ECU-001",
+          "quantity": "1",
+          "unit": "台"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "281084f154f1d4e835ae262a1e3e1a36b2fa61ebfc2a9f9655bdca0b6d41ba8f",
+      "input_tokens": 1043,
+      "latency_ms": 7423.9,
+      "passed": true,
+      "tags": [
+        "prompt_injection"
+      ]
+    },
+    {
+      "case_id": "live-010",
+      "cost_usd": 0.0,
+      "extracted": [
+        {
+          "allow_equivalent": false,
+          "description": "涡轮增压器",
+          "equipment_model": "EN-6C-A",
+          "line_number": 1,
+          "part_number": "DEMO-ENG-TURBO-001",
+          "quantity": "2",
+          "unit": "piece"
+        }
+      ],
+      "failure_class": null,
+      "input_sha256": "705b4ab8b32f14f7c02944b5a74ba6c8a0740234d58872f70c354a452d2eea91",
+      "input_tokens": 581,
+      "latency_ms": 2998.8,
+      "passed": true,
+      "tags": [
+        "tool_boundary"
+      ]
+    }
+  ],
+  "suite": "live_model_intake_v1",
+  "total_cost_usd": 0.0,
+  "total_tokens": 6974
+}

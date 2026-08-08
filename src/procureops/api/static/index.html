@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProcureOps · 采购任务工作台</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">PO</span>
+        <div><strong>ProcureOps</strong><small>采购任务工作台</small></div>
+      </div>
+      <button id="new-task-button" class="primary full">＋ 新建采购任务</button>
+      <div class="side-heading"><span>任务队列</span><button id="refresh-button" class="icon" title="刷新">↻</button></div>
+      <div id="task-list" class="task-list"><div class="empty">正在加载任务…</div></div>
+      <div class="system-card">
+        <span class="pulse"></span><strong>Harness 正常</strong>
+        <small>SQLite · 本机模式 · 可回放</small>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div><span class="eyebrow">TENANT</span><strong>工程机械配件采购</strong></div>
+        <div class="top-actions">
+          <span class="role">采购员 · 审批演示角色</span>
+          <button id="worker-button" class="secondary">运行下一项 Worker</button>
+        </div>
+      </header>
+
+      <section id="empty-view" class="welcome">
+        <span class="eyebrow">TASK-FIRST AGENT</span>
+        <h1>把采购意图变成<br><em>有证据的执行草稿</em></h1>
+        <p>上传 PDF、Excel、图片或输入自然语言。系统将经过目录匹配、供应商查询、确定性成本计算、政策检查与人工审批。</p>
+        <button id="welcome-new-button" class="primary">创建第一个任务</button>
+        <div class="capabilities">
+          <div><b>01</b><strong>字段级证据</strong><span>来源、时间、置信度完整留痕</span></div>
+          <div><b>02</b><strong>确定性执行</strong><span>价格库存只走数据库与工具</span></div>
+          <div><b>03</b><strong>高风险治理</strong><span>审批绑定动作、内容与有效期</span></div>
+        </div>
+      </section>
+
+      <section id="detail-view" class="detail hidden">
+        <div class="detail-head">
+          <div><span class="eyebrow">PROCUREMENT TASK</span><h1 id="detail-title">采购任务</h1><code id="detail-id"></code></div>
+          <span id="detail-status" class="status"></span>
+        </div>
+        <div class="metrics">
+          <article><span>采购明细</span><strong id="metric-lines">0</strong><small>条结构化行</small></article>
+          <article><span>证据覆盖</span><strong id="metric-evidence">0</strong><small>条可追溯证据</small></article>
+          <article><span>工具任务</span><strong id="metric-jobs">0</strong><small>项持久化 Job</small></article>
+          <article><span>总成本</span><strong id="metric-cost">—</strong><small>确定性 Decimal 计算</small></article>
+        </div>
+
+        <div id="action-panel" class="action-panel hidden"></div>
+
+        <div class="content-grid">
+          <article class="panel wide">
+            <div class="panel-head"><div><span class="eyebrow">LINE ITEMS</span><h2>采购明细</h2></div><span>数据库实时状态</span></div>
+            <div class="table-wrap"><table><thead><tr><th>#</th><th>需求</th><th>数量</th><th>目录匹配</th><th>供应商</th><th>置信度</th></tr></thead><tbody id="items-body"></tbody></table></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><span class="eyebrow">EVIDENCE</span><h2>证据链</h2></div></div>
+            <div id="evidence-list" class="feed"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><span class="eyebrow">WORKFLOW</span><h2>状态时间线</h2></div></div>
+            <div id="event-list" class="timeline"></div>
+          </article>
+          <article id="po-panel" class="panel wide hidden">
+            <div class="panel-head"><div><span class="eyebrow">OUTPUT</span><h2>采购单草稿</h2></div><span class="verified">✓ 幂等写入</span></div>
+            <pre id="po-content"></pre>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="new-task-dialog">
+    <form method="dialog" id="new-task-form">
+      <div class="dialog-head"><div><span class="eyebrow">NEW TASK</span><h2>新建采购任务</h2></div><button value="cancel" class="icon">×</button></div>
+      <label>自然语言采购需求<textarea id="task-text" rows="7" placeholder="例如：采购 2 件液压泵，零件号 HM-HYD-001，适配 EX200-A，单位件。"></textarea></label>
+      <div class="or"><span>或上传业务文件</span></div>
+      <label class="drop"><input id="task-file" type="file" accept=".txt,.md,.csv,.pdf,.xlsx,.xlsm,.png,.jpg,.jpeg,.webp"><strong>PDF / Excel / 图片 / 文本</strong><span>最大 10 MiB，原文件按租户隔离保存并计算 SHA-256</span></label>
+      <p id="form-error" class="error"></p>
+      <div class="dialog-actions"><button value="cancel" class="secondary">取消</button><button id="submit-task" value="default" class="primary">创建并进入队列</button></div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

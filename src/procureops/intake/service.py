@@ -179,17 +179,27 @@ class IntakeService:
             rows: list[dict[str, Any]] = []
             locators: list[str] = []
         else:
-            headers = self._map_headers(values[0])
+            header_index = None
+            headers: dict[str, int] = {}
+            for candidate_index, candidate_row in enumerate(values[:50]):
+                candidate_headers = self._map_headers(candidate_row)
+                if candidate_headers:
+                    header_index = candidate_index
+                    headers = candidate_headers
+                    break
             rows = []
             locators = []
-            for row_index, values_row in enumerate(values[1:], start=2):
-                row = {
-                    field: values_row[index] if index < len(values_row) else None
-                    for field, index in headers.items()
-                }
-                if row.get("description") and row.get("quantity"):
-                    rows.append(row)
-                    locators.append(f"{sheet.title}!A{row_index}")
+            if header_index is not None:
+                for row_index, values_row in enumerate(
+                    values[header_index + 1 :], start=header_index + 2
+                ):
+                    row = {
+                        field: values_row[index] if index < len(values_row) else None
+                        for field, index in headers.items()
+                    }
+                    if row.get("description") and row.get("quantity"):
+                        rows.append(row)
+                        locators.append(f"{sheet.title}!A{row_index}")
         workbook.close()
         questions = () if rows else ("Excel 中未找到包含品名和数量的采购行。",)
         return self._result(
@@ -255,9 +265,7 @@ class IntakeService:
                 unit=unit,
                 part_number=(str(row["part_number"]).strip() if row.get("part_number") else None),
                 equipment_model=(
-                    str(row["equipment_model"]).strip()
-                    if row.get("equipment_model")
-                    else None
+                    str(row["equipment_model"]).strip() if row.get("equipment_model") else None
                 ),
             )
             lines.append(line)

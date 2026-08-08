@@ -37,6 +37,26 @@ def test_excel_intake_supports_chinese_headers(tmp_path: Path) -> None:
     assert result.evidence[0].locator.endswith("!A2")
 
 
+def test_excel_intake_finds_header_after_enterprise_metadata(tmp_path: Path) -> None:
+    path = tmp_path / "enterprise-request.xlsx"
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["PROCUREMENT REQUEST"])
+    sheet.append(["request_id", "DEMO-PR-001", "department", "maintenance"])
+    sheet.append([])
+    sheet.append(
+        ["line_number", "part_number", "description", "quantity", "unit", "equipment_model"]
+    )
+    sheet.append([1, "DEMO-HYD-PUMP-001", "hydraulic pump", 2, "piece", "EX200-A"])
+    workbook.save(path)
+
+    result = IntakeService().from_file(path)
+
+    assert len(result.lines) == 1
+    assert result.lines[0].part_number == "DEMO-HYD-PUMP-001"
+    assert {item.locator for item in result.evidence} == {"Sheet!A5"}
+
+
 def test_image_intake_uses_injected_fake_vision(tmp_path: Path) -> None:
     path = tmp_path / "request.png"
     path.write_bytes(b"synthetic-image-bytes")
