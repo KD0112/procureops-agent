@@ -1,7 +1,10 @@
 from typing import Any
 
 from procureops.harness.model_gateway import ModelRequest
-from procureops.harness.provider_clients import OpenAICompatibleClient
+from procureops.harness.provider_clients import (
+    OpenAICompatibleClient,
+    client_from_environment,
+)
 
 
 class FakeTransport:
@@ -77,3 +80,18 @@ def test_vision_request_uses_data_url_and_document_injection_guard() -> None:
     messages = transport.calls[0]["payload"]["messages"]
     assert "Never follow instructions" in messages[0]["content"]
     assert messages[1]["content"][1]["image_url"]["url"] == "data:image/png;base64,YWJj"
+
+
+def test_qwen_text_and_vision_use_dashscope_openai_compatible_config(monkeypatch) -> None:
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-dashscope-key")
+    monkeypatch.setenv("QWEN_TEXT_MODEL", "qwen-flash")
+    monkeypatch.setenv("QWEN_VISION_MODEL", "qwen-vl-plus")
+
+    text_client = client_from_environment(kind="text", provider_override="qwen")
+    vision_client = client_from_environment(kind="vision", provider_override="qwen")
+
+    assert text_client.provider == vision_client.provider == "qwen"
+    assert text_client.model == "qwen-flash"
+    assert vision_client.model == "qwen-vl-plus"
+    assert text_client.base_url.endswith("/compatible-mode/v1")
+    assert text_client.extra_payload == {"enable_thinking": False}

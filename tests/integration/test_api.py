@@ -163,3 +163,133 @@ def test_demo_assets_follow_offline_intake_contract(
             assert detail["evidence"]
         else:
             assert detail["items"] == []
+
+
+def test_api_memory_candidate_requires_confirmation_and_is_used_next_task(
+    tmp_path: Path,
+) -> None:
+    with _client(tmp_path) as client:
+        created = client.post(
+            "/api/tasks/text",
+            headers=HEADERS,
+            json={
+                "text": (
+                    "DEMO-HYD-PUMP-001,液压泵,1,件,EX200-A。"
+                    "以后送货请安排在工作日上午"
+                )
+            },
+        )
+        task_id = created.json()["task_id"]
+        _run_worker(client)
+        memories = client.get("/api/memory", headers=HEADERS).json()["items"]
+        assert len(memories) == 1
+        assert memories[0]["status"] == "candidate"
+        confirmed = client.post(
+            f"/api/memory/{memories[0]['record_id']}/confirm",
+            headers=HEADERS,
+        )
+        assert confirmed.status_code == 200
+
+        second = client.post(
+            "/api/tasks/text",
+            headers=HEADERS,
+            json={"text": "DEMO-FLT-KIT-001,保养滤芯包,1,套,SVC-2000H-A"},
+        )
+        second_id = second.json()["task_id"]
+        _run_worker(client)
+        detail = client.get(f"/api/tasks/{second_id}", headers=HEADERS).json()
+        assert any(
+            item["field_name"] == "memory.preferred_delivery_window"
+            for item in detail["evidence"]
+        )
+        assert task_id != second_id
+
+
+def test_api_governed_prompt_release_requires_eval_and_compliance(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        feedback = client.post(
+            "/api/governance/feedback",
+            headers=HEADERS,
+            json={
+                "feedback_type": "correction",
+                "summary": "中文数量需要稳定转换",
+                "correction": {"expected": "2"},
+            },
+        ).json()
+        overview = client.get("/api/governance", headers=HEADERS).json()
+        baseline_prompt = overview["active_prompt"]["prompt_text"]
+        proposed = client.post(
+            "/api/governance/prompt-candidates",
+            headers=HEADERS,
+            json={
+                "candidate_version": "1.1.0-demo",
+                "prompt_text": baseline_prompt + " Convert Chinese numbers exactly.",
+                "feedback_ids": [feedback["feedback_id"]],
+            },
+        )
+        assert proposed.status_code == 201
+        candidate_id = proposed.json()["candidate_id"]
+        assert client.post(
+            f"/api/governance/prompt-candidates/{candidate_id}/evaluate",
+            headers=HEADERS,
+        ).json()["evaluation_passed"] is True
+
+        operator_only = {**HEADERS, "X-Actor-Roles": "procurement_operator"}
+        assert client.post(
+            f"/api/governance/prompt-candidates/{candidate_id}/approve",
+            headers=operator_only,
+        ).status_code == 403
+        assert client.post(
+            f"/api/governance/prompt-candidates/{candidate_id}/approve",
+            headers=HEADERS,
+        ).status_code == 200
+        release = client.post(
+            f"/api/governance/prompt-candidates/{candidate_id}/release",
+            headers=HEADERS,
+        )
+        assert release.status_code == 200
+        assert client.get("/api/governance", headers=HEADERS).json()[
+            "active_prompt"
+        ]["prompt_version"] == "1.1.0-demo"
+
+
+def test_api_deterministic_multi_agent_persists_diagnosable_trace(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        created = client.post(
+            "/api/tasks/text",
+            headers=HEADERS,
+            json={
+                "text": "DEMO-HYD-PUMP-001,液压泵,1,件,EX200-A",
+                "architecture": "multi",
+            },
+        )
+        assert created.status_code == 202
+        task_id = created.json()["task_id"]
+        outcome = _run_worker(client)["outcome"]
+        assert outcome["architecture"] == "multi"
+        assert outcome["specialist_messages"] == 4
+        detail = client.get(f"/api/tasks/{task_id}", headers=HEADERS).json()
+        traces = [
+            event for event in detail["events"] if event["event_type"] == "supervisor.trace"
+        ]
+        assert traces[0]["payload"]["architecture"] == "multi"
+        assert len(traces[0]["payload"]["messages"]) == 4
+
+
+def test_api_model_multi_agent_requires_explicit_live_model_opt_in(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("PROCUREOPS_ENABLE_LIVE_MODELS", "0")
+    with _client(tmp_path) as client:
+        response = client.post(
+            "/api/tasks/text",
+            headers=HEADERS,
+            json={
+                "text": "DEMO-HYD-PUMP-001,液压泵,1,件,EX200-A",
+                "architecture": "multi_llm",
+            },
+        )
+
+        assert response.status_code == 409
+        assert "PROCUREOPS_ENABLE_LIVE_MODELS=1" in response.json()["detail"]

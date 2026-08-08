@@ -27,10 +27,38 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 & ".\.venv\Scripts\python.exe" scripts\run_evaluation.py
 ```
 
-报告位于 `var/evals/<run-id>/`，包括单 Agent、多 Agent、200 个回放包和 `ab_comparison.json`。`var/` 已被 Git 忽略。
+报告位于 `var/evals/<run-id>/`，包括单 Agent、确定性多 Agent、FakeModel 多 Agent、300 个回放包以及两份 A/B 报告。`var/` 已被 Git 忽略。
 
-## 4. 真实模型接入
+## 4. 网站演示
+
+```powershell
+& ".\.venv\Scripts\python.exe" scripts\run_api.py
+# 浏览器访问 http://127.0.0.1:8000
+```
+
+演示顺序：
+
+1. 新建采购任务，先选“单 Agent + 工具”，运行 Worker，展示证据、审批和 PO 草稿。
+2. 输入“以后送货请安排在工作日上午”，运行后打开“用户记忆”，确认候选；新任务会出现 `memory.preferred_delivery_window` 证据。
+3. 打开“进化治理”，提交纠错反馈，从反馈创建候选，依次执行离线评测、合规审批、人工发布，并演示回滚。
+4. 再以“确定性多 Agent”创建任务，在时间线查看 `supervisor.trace`。
+5. 只有模型配置完整时才选择“模型多 Agent”；该模式每个专业 Agent 都经过 Model Gateway。
+
+## 5. 真实模型接入
 
 项目只读加载 `day1/.env`。文本和视觉模型统一经过 Model Gateway；请求载荷只记录哈希，API Key 不进入审计事件。
 
 真实模型主要用于无法由确定性解析器处理的自然语言和图片。金额、审批、权限、目录真值、价格和库存不会交给模型决定。
+
+千问的文本和视觉模型共用 DashScope OpenAI-compatible 适配：
+
+```powershell
+$env:AGENT_TEXT_PROVIDER="qwen"
+$env:AGENT_VISION_PROVIDER="qwen"
+$env:DASHSCOPE_API_KEY="<your-key>"
+$env:QWEN_TEXT_MODEL="qwen-flash"
+$env:QWEN_VISION_MODEL="qwen-vl-plus"
+$env:PROCUREOPS_ENABLE_LIVE_MODELS="1"
+& ".\.venv\Scripts\python.exe" scripts\run_live_model_eval.py --provider qwen --limit 10
+& ".\.venv\Scripts\python.exe" scripts\run_live_vision_smoke.py --provider qwen
+```

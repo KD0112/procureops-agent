@@ -62,3 +62,16 @@ class SQLiteDatabase:
                 )
                 applied.append(version)
         return tuple(applied)
+
+    def optimize(self) -> None:
+        with self.connect() as connection:
+            connection.execute("PRAGMA optimize")
+
+    def explain_query_plan(
+        self,
+        sql: str,
+        parameters: tuple[object, ...] = (),
+    ) -> tuple[str, ...]:
+        with self.connect() as connection:
+            rows = connection.execute(f"EXPLAIN QUERY PLAN {sql}", parameters).fetchall()
+        return tuple(str(row["detail"]) for row in rows)

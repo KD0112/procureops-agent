@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -15,6 +15,8 @@ from procureops.agents.single import WorkflowResult
 from procureops.domain.enums import TaskStatus
 from procureops.domain.policy import ApprovalRequirement
 from procureops.evals.replay import ReplayStore
+from procureops.harness.provider_clients import model_configuration_status
+from procureops.intake.prompts import PROMPT_SCOPE_TEXT_INTAKE
 from procureops.runtime import ProcureOpsRuntime
 from procureops.worker.service import ProcureOpsWorker
 
@@ -32,6 +34,7 @@ class Actor:
 
 class TextTaskRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20_000)
+    architecture: str = Field(default="single", pattern="^(single|multi|multi_llm)$")
 
 
 class AnswerRequest(BaseModel):
@@ -41,6 +44,29 @@ class AnswerRequest(BaseModel):
 class ApprovalDecision(BaseModel):
     decision: str = Field(pattern="^(approve|reject)$")
     reason: str | None = Field(default=None, max_length=500)
+
+
+class MemoryProposalRequest(BaseModel):
+    memory_key: str = Field(min_length=1, max_length=100)
+    value: Any
+    confidence: float = Field(default=1.0, ge=0, le=1)
+
+
+class MemoryCorrectionRequest(BaseModel):
+    value: Any
+
+
+class FeedbackRequest(BaseModel):
+    feedback_type: str = Field(pattern="^(correction|preference|failure|rating)$")
+    summary: str = Field(min_length=1, max_length=2_000)
+    correction: dict[str, Any] = Field(default_factory=dict)
+    task_id: str | None = None
+
+
+class PromptCandidateRequest(BaseModel):
+    candidate_version: str = Field(min_length=1, max_length=100)
+    prompt_text: str = Field(min_length=1, max_length=8_000)
+    feedback_ids: tuple[str, ...] = Field(min_length=1, max_length=100)
 
 
 def actor_from_headers(
@@ -67,8 +93,11 @@ def create_app(
     )
     app = FastAPI(
         title="ProcureOps Agent API",
-        version="0.2.0",
-        description="Task-first local procurement workbench backed by the governed Harness.",
+        version="0.3.0",
+        description=(
+            "Task-first procurement workbench with governed memory, evolution, "
+            "multi-agent experiments, and Harness controls."
+        ),
     )
     app.state.runtime = runtime
     app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="static")
@@ -86,11 +115,16 @@ def create_app(
         request: TextTaskRequest,
         actor: Annotated[Actor, Depends(actor_from_headers)],
     ) -> dict[str, Any]:
+        _ensure_architecture_ready(request.architecture)
         task_id = str(uuid4())
         runtime.repository.create_task(
             tenant_id=actor.tenant_id,
             created_by=actor.actor_id,
-            request={"source_type": "text", "preview": request.text[:200]},
+            request={
+                "source_type": "text",
+                "preview": request.text[:200],
+                "architecture": request.architecture,
+            },
             workflow_version="1.0.0",
             task_id=task_id,
         )
@@ -101,6 +135,7 @@ def create_app(
             payload=_job_payload(
                 actor=actor,
                 source={"kind": "text", "text": request.text, "artifact_id": task_id},
+                architecture=request.architecture,
             ),
             idempotency_key=f"intake:{task_id}:v1",
         )
@@ -110,7 +145,10 @@ def create_app(
     async def create_upload_task(
         file: Annotated[UploadFile, File()],
         actor: Annotated[Actor, Depends(actor_from_headers)],
+        architecture: Annotated[str, Form()] = "single",
     ) -> dict[str, Any]:
+        _validate_architecture(architecture)
+        _ensure_architecture_ready(architecture)
         task_id = str(uuid4())
         data = await file.read(runtime.blobs.max_bytes + 1)
         if len(data) > runtime.blobs.max_bytes:
@@ -118,7 +156,11 @@ def create_app(
         runtime.repository.create_task(
             tenant_id=actor.tenant_id,
             created_by=actor.actor_id,
-            request={"source_type": "upload", "filename": file.filename},
+            request={
+                "source_type": "upload",
+                "filename": file.filename,
+                "architecture": architecture,
+            },
             workflow_version="1.0.0",
             task_id=task_id,
         )
@@ -148,6 +190,7 @@ def create_app(
             payload=_job_payload(
                 actor=actor,
                 source={"kind": "upload", "storage_key": stored.storage_key},
+                architecture=architecture,
             ),
             idempotency_key=f"intake:{task_id}:v1",
         )
@@ -196,6 +239,7 @@ def create_app(
                     "text": request.text,
                     "artifact_id": f"answer-{task_id}-{next_version}",
                 },
+                architecture=str(task.request.get("architecture", "single")),
             ),
             idempotency_key=f"answer:{task_id}:v{next_version}",
         )
@@ -268,6 +312,7 @@ def create_app(
             payload={
                 "actor_id": "local-worker",
                 "actor_roles": ["procurement_operator"],
+                "architecture": str(task.request.get("architecture", "single")),
                 "approval": grant.model_dump(mode="json"),
             },
             idempotency_key=f"approval:{grant.approval_id}",
@@ -341,6 +386,8 @@ def create_app(
             "latest_single_summary.json",
             "latest_multi_summary.json",
             "latest_ab_comparison.json",
+            "latest_llm_multi_summary.json",
+            "latest_llm_ab_comparison.json",
             "latest_live_model_eval.json",
             "latest_live_vision_smoke.json",
         )
@@ -350,14 +397,243 @@ def create_app(
             if (reports / name).is_file()
         }
 
+    @app.get("/api/models/status")
+    def model_status(
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        _require_role(actor, "procurement_operator")
+        return {
+            "live_models_enabled": _live_models_enabled(),
+            "text": model_configuration_status(kind="text"),
+            "vision": model_configuration_status(kind="vision"),
+            "qwen_switch": {
+                "text_provider_value": "qwen",
+                "vision_provider_value": "qwen",
+                "required_secret": "DASHSCOPE_API_KEY",
+            },
+        }
+
+    @app.get("/api/memory")
+    def list_memory(
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+        memory_status: str | None = None,
+    ) -> dict[str, Any]:
+        records = runtime.memory.list_records(
+            tenant_id=actor.tenant_id,
+            user_id=actor.actor_id,
+            status=memory_status,
+        )
+        return {"items": [item.model_dump(mode="json") for item in records]}
+
+    @app.post("/api/memory/candidates", status_code=status.HTTP_201_CREATED)
+    def propose_memory(
+        request: MemoryProposalRequest,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        try:
+            record = runtime.memory.propose(
+                tenant_id=actor.tenant_id,
+                user_id=actor.actor_id,
+                memory_key=request.memory_key,
+                value=request.value,
+                confidence=request.confidence,
+                proposed_by=actor.actor_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return record.model_dump(mode="json")
+
+    @app.post("/api/memory/{record_id}/confirm")
+    def confirm_memory(
+        record_id: str,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        try:
+            record = runtime.memory.confirm(
+                tenant_id=actor.tenant_id,
+                user_id=actor.actor_id,
+                record_id=record_id,
+                confirmed_by=actor.actor_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return record.model_dump(mode="json")
+
+    @app.patch("/api/memory/{record_id}")
+    def correct_memory(
+        record_id: str,
+        request: MemoryCorrectionRequest,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        try:
+            record = runtime.memory.correct(
+                tenant_id=actor.tenant_id,
+                user_id=actor.actor_id,
+                record_id=record_id,
+                new_value=request.value,
+                corrected_by=actor.actor_id,
+            )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return record.model_dump(mode="json")
+
+    @app.delete("/api/memory/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+    def delete_memory(
+        record_id: str,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> None:
+        try:
+            runtime.memory.delete(
+                tenant_id=actor.tenant_id,
+                user_id=actor.actor_id,
+                record_id=record_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    @app.get("/api/governance")
+    def governance_overview(
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        active = runtime.evolution.bootstrap_baseline(tenant_id=actor.tenant_id)
+        return {
+            "active_prompt": active.model_dump(mode="json"),
+            "feedback": [
+                item.model_dump(mode="json")
+                for item in runtime.evolution.list_feedback(tenant_id=actor.tenant_id)
+            ],
+            "candidates": [
+                item.model_dump(mode="json")
+                for item in runtime.evolution.list_candidates(tenant_id=actor.tenant_id)
+            ],
+            "release_policy": "offline_eval_then_compliance_approval",
+        }
+
+    @app.post("/api/governance/feedback", status_code=status.HTTP_201_CREATED)
+    def create_feedback(
+        request: FeedbackRequest,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        if request.task_id is not None:
+            _get_task(runtime, actor=actor, task_id=request.task_id)
+        record = runtime.evolution.create_feedback(
+            tenant_id=actor.tenant_id,
+            user_id=actor.actor_id,
+            task_id=request.task_id,
+            feedback_type=request.feedback_type,
+            summary=request.summary,
+            correction=request.correction,
+        )
+        return record.model_dump(mode="json")
+
+    @app.post(
+        "/api/governance/prompt-candidates",
+        status_code=status.HTTP_201_CREATED,
+    )
+    def propose_prompt_candidate(
+        request: PromptCandidateRequest,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        _require_role(actor, "procurement_operator")
+        try:
+            candidate = runtime.evolution.propose_candidate(
+                tenant_id=actor.tenant_id,
+                scope=PROMPT_SCOPE_TEXT_INTAKE,
+                candidate_version=request.candidate_version,
+                prompt_text=request.prompt_text,
+                proposed_by=actor.actor_id,
+                feedback_ids=request.feedback_ids,
+            )
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return candidate.model_dump(mode="json")
+
+    @app.post("/api/governance/prompt-candidates/{candidate_id}/evaluate")
+    def evaluate_prompt_candidate(
+        candidate_id: str,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        _require_role(actor, "procurement_operator")
+        try:
+            candidate = runtime.evolution.evaluate_contract(
+                tenant_id=actor.tenant_id,
+                candidate_id=candidate_id,
+                evaluated_by=actor.actor_id,
+            )
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return candidate.model_dump(mode="json")
+
+    @app.post("/api/governance/prompt-candidates/{candidate_id}/approve")
+    def approve_prompt_candidate(
+        candidate_id: str,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        try:
+            candidate = runtime.evolution.approve_candidate(
+                tenant_id=actor.tenant_id,
+                candidate_id=candidate_id,
+                approved_by=actor.actor_id,
+                actor_roles=actor.roles,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return candidate.model_dump(mode="json")
+
+    @app.post("/api/governance/prompt-candidates/{candidate_id}/release")
+    def release_prompt_candidate(
+        candidate_id: str,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        try:
+            release = runtime.evolution.release_candidate(
+                tenant_id=actor.tenant_id,
+                candidate_id=candidate_id,
+                released_by=actor.actor_id,
+                actor_roles=actor.roles,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return release.model_dump(mode="json")
+
+    @app.post("/api/governance/releases/{release_id}/rollback")
+    def rollback_prompt_release(
+        release_id: str,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        try:
+            release = runtime.evolution.rollback_release(
+                tenant_id=actor.tenant_id,
+                release_id=release_id,
+                rolled_back_by=actor.actor_id,
+                actor_roles=actor.roles,
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return release.model_dump(mode="json")
+
     return app
 
 
-def _job_payload(*, actor: Actor, source: dict[str, Any]) -> dict[str, Any]:
+def _job_payload(
+    *,
+    actor: Actor,
+    source: dict[str, Any],
+    architecture: str = "single",
+) -> dict[str, Any]:
     return {
         "actor_id": actor.actor_id,
         "actor_roles": sorted(actor.roles),
         "source": source,
+        "architecture": architecture,
         "run_id": f"api-{uuid4().hex}",
     }
 
@@ -367,6 +643,34 @@ def _get_task(runtime: ProcureOpsRuntime, *, actor: Actor, task_id: str):
         return runtime.repository.get_task(tenant_id=actor.tenant_id, task_id=task_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="task not found") from exc
+
+
+def _require_role(actor: Actor, role: str) -> None:
+    if role not in actor.roles:
+        raise HTTPException(status_code=403, detail=f"{role} role required")
+
+
+def _validate_architecture(architecture: str) -> None:
+    if architecture not in {"single", "multi", "multi_llm"}:
+        raise HTTPException(status_code=422, detail="invalid agent architecture")
+
+
+def _ensure_architecture_ready(architecture: str) -> None:
+    if architecture != "multi_llm":
+        return
+    if not _live_models_enabled():
+        raise HTTPException(
+            status_code=409,
+            detail="multi_llm requires PROCUREOPS_ENABLE_LIVE_MODELS=1",
+        )
+    if not model_configuration_status(kind="text")["configured"]:
+        raise HTTPException(status_code=409, detail="text model configuration is incomplete")
+
+
+def _live_models_enabled() -> bool:
+    import os
+
+    return os.environ.get("PROCUREOPS_ENABLE_LIVE_MODELS", "0") == "1"
 
 
 def _clean_task_row(row: dict[str, Any]) -> dict[str, Any]:

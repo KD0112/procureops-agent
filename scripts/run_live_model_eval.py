@@ -24,6 +24,7 @@ from procureops.harness.provider_clients import client_from_environment  # noqa:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--provider", choices=("deepseek", "qwen"))
     parser.add_argument(
         "--output",
         type=Path,
@@ -34,7 +35,7 @@ def main() -> None:
         raise SystemExit(f"--limit must be between 1 and {len(DEFAULT_LIVE_CASES)}")
     load_environment(PROJECT_ROOT)
     report = run_live_model_eval(
-        client=client_from_environment(kind="text"),
+        client=client_from_environment(kind="text", provider_override=args.provider),
         cases=DEFAULT_LIVE_CASES[: args.limit],
     )
     path = save_live_model_report(report, args.output)

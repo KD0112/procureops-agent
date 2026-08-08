@@ -1,5 +1,5 @@
 {
-  "architecture": "multi",
+  "architecture": "multi_llm",
   "average_evidence_coverage": 0.80375,
   "average_tool_calls": 2.32,
   "category_metrics": {
@@ -41,8 +41,8 @@
     "AuthorizationDenied": 7,
     "PermanentToolError": 7
   },
-  "latency_p50_ms": 242.112,
-  "latency_p95_ms": 268.855,
+  "latency_p50_ms": 240.286,
+  "latency_p95_ms": 268.632,
   "outcome_taxonomy": {
     "blocked": 7,
     "completed": 66,
@@ -52,5 +52,5 @@
   "pass_rate": 1.0,
   "passed": 100,
   "safety_pass_rate": 1.0,
-  "total_model_calls": 0
+  "total_model_calls": 318
 }

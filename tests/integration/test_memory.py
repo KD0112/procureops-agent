@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from procureops.memory import MemoryService
+from procureops.memory.candidates import detect_preference_candidates
 from procureops.storage import ProcureOpsRepository
 
 
@@ -136,3 +137,46 @@ def test_expired_memory_is_not_used(repository: ProcureOpsRepository) -> None:
         user_id=candidate.user_id,
         at=datetime.now(UTC) + timedelta(seconds=2),
     ) == {}
+
+
+def test_memory_candidate_deduplicates_same_source_and_can_be_listed(
+    repository: ProcureOpsRepository,
+) -> None:
+    service = memory_service(repository)
+    first = service.propose(
+        tenant_id="tenant_engineering_machinery",
+        user_id="buyer-001",
+        memory_key="preferred_delivery_window",
+        value="工作日上午",
+        confidence=0.92,
+        proposed_by="preference_detector_v1",
+        source_hash="same-source-hash",
+    )
+    second = service.propose(
+        tenant_id="tenant_engineering_machinery",
+        user_id="buyer-001",
+        memory_key="preferred_delivery_window",
+        value="工作日上午",
+        confidence=0.92,
+        proposed_by="preference_detector_v1",
+        source_hash="same-source-hash",
+    )
+
+    assert second.record_id == first.record_id
+    assert service.list_records(
+        tenant_id=first.tenant_id,
+        user_id=first.user_id,
+        status="candidate",
+    ) == (first,)
+
+
+def test_safe_preference_detector_only_proposes_whitelisted_memory() -> None:
+    candidates = detect_preference_candidates(
+        "请采购 DEMO-HYD-PUMP-001 两件。以后送货请安排在工作日上午,"
+        "供应商优先比较总成本。我的 api_key 是 should-not-store。"
+    )
+
+    assert {(item.memory_key, item.value) for item in candidates} == {
+        ("preferred_delivery_window", "工作日上午"),
+        ("preferred_supplier_strategy", "总成本"),
+    }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
@@ -59,6 +60,7 @@ class OpenAICompatibleClient:
     timeout_seconds: float = 60.0
     input_cost_per_million: float = 0.0
     output_cost_per_million: float = 0.0
+    extra_payload: dict[str, Any] = field(default_factory=dict)
 
     def generate(self, request: ModelRequest) -> ModelResponse:
         messages = self._messages(request)
@@ -73,6 +75,7 @@ class OpenAICompatibleClient:
                 "messages": messages,
                 "temperature": 0,
                 "response_format": {"type": "json_object"},
+                **self.extra_payload,
             },
             timeout_seconds=self.timeout_seconds,
         )
@@ -129,23 +132,49 @@ class OpenAICompatibleClient:
         return [{"role": "system", "content": system}, user_message]
 
 
-def client_from_environment(*, kind: str) -> OpenAICompatibleClient:
+def client_from_environment(
+    *,
+    kind: str,
+    provider_override: str | None = None,
+) -> OpenAICompatibleClient:
     load_environment()
-    import os
-
-    if kind == "text":
-        provider = os.environ.get("AGENT_TEXT_PROVIDER", "deepseek")
+    if kind not in {"text", "vision"}:
+        raise ValueError("kind must be text or vision")
+    provider = (
+        provider_override
+        or os.environ.get(f"AGENT_{kind.upper()}_PROVIDER")
+        or ("deepseek" if kind == "text" else "zhipu")
+    ).casefold()
+    if provider in {"qwen", "dashscope", "alibaba"}:
+        provider = "qwen"
+        base_url = (
+            os.environ.get("QWEN_BASE_URL")
+            or os.environ.get("DASHSCOPE_BASE_URL")
+            or "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        if kind == "text":
+            model = (
+                os.environ.get("QWEN_TEXT_MODEL")
+                or os.environ.get("QWEN_MODEL")
+                or "qwen-flash"
+            )
+        else:
+            model = os.environ.get("QWEN_VISION_MODEL") or "qwen-vl-plus"
+        api_key = os.environ.get("DASHSCOPE_API_KEY") or os.environ.get(
+            "QWEN_API_KEY", ""
+        )
+        extra_payload = {"enable_thinking": False}
+    elif kind == "text":
         prefix = provider.upper()
         base_url = os.environ.get(f"{prefix}_BASE_URL", "")
         model = os.environ.get(f"{prefix}_MODEL", "")
         api_key = os.environ.get(f"{prefix}_API_KEY", "")
-    elif kind == "vision":
-        provider = os.environ.get("AGENT_VISION_PROVIDER", "zhipu")
+        extra_payload = {}
+    else:
         base_url = os.environ.get("AGENT_VISION_BASE_URL", "")
         model = os.environ.get("AGENT_VISION_MODEL", "")
         api_key = os.environ.get(f"{provider.upper()}_API_KEY", "")
-    else:
-        raise ValueError("kind must be text or vision")
+        extra_payload = {}
     if not all((base_url, model, api_key)):
         raise RuntimeError(f"incomplete {kind} model configuration")
     return OpenAICompatibleClient(
@@ -153,7 +182,26 @@ def client_from_environment(*, kind: str) -> OpenAICompatibleClient:
         model=model,
         base_url=base_url,
         api_key=api_key,
+        extra_payload=extra_payload,
     )
+
+
+def model_configuration_status(*, kind: str) -> dict[str, Any]:
+    load_environment()
+    provider = os.environ.get(
+        f"AGENT_{kind.upper()}_PROVIDER",
+        "deepseek" if kind == "text" else "zhipu",
+    ).casefold()
+    try:
+        client = client_from_environment(kind=kind)
+    except RuntimeError:
+        return {"kind": kind, "provider": provider, "model": None, "configured": False}
+    return {
+        "kind": kind,
+        "provider": client.provider,
+        "model": client.model,
+        "configured": True,
+    }
 
 
 def _parse_json_content(content: Any) -> dict[str, Any]:

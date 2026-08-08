@@ -7,7 +7,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
-from procureops.agents import SingleAgentWorkflow, SupervisorWorkflow
+from procureops.agents import LLMSupervisorWorkflow, SingleAgentWorkflow, SupervisorWorkflow
 from procureops.agents.single import default_policy
 from procureops.demo import seed_demo_database
 from procureops.domain.enums import TaskStatus
@@ -17,6 +17,7 @@ from procureops.evals.replay import ReplayStore
 from procureops.harness.audit import InMemoryAuditSink
 from procureops.harness.budget import RunBudgetLedger
 from procureops.harness.errors import AuthorizationDenied, PermanentToolError
+from procureops.harness.model_gateway import ModelClient, ModelGateway
 from procureops.harness.tool_gateway import ToolGateway
 from procureops.intake import IntakeService
 from procureops.memory import MemoryService
@@ -48,11 +49,15 @@ class EvaluationRunner:
         replay_root: Path,
         architecture: str,
         snapshot_at: datetime | None = None,
+        model_client: ModelClient | None = None,
     ) -> None:
-        if architecture not in {"single", "multi"}:
-            raise ValueError("architecture must be single or multi")
+        if architecture not in {"single", "multi", "multi_llm"}:
+            raise ValueError("architecture must be single, multi, or multi_llm")
+        if architecture == "multi_llm" and model_client is None:
+            raise ValueError("multi_llm evaluation requires an explicit model client")
         self.project_root = project_root
         self.architecture = architecture
+        self.model_client = model_client
         self.database = SQLiteDatabase(database_path)
         self.repository = seed_demo_database(
             self.database,
@@ -117,7 +122,7 @@ class EvaluationRunner:
         gateway = ToolGateway(audit=audit)
         register_procurement_tools(gateway, self.repository, faults=case.fault)
         context = self._context(case)
-        agent: SingleAgentWorkflow | SupervisorWorkflow
+        agent: SingleAgentWorkflow | SupervisorWorkflow | LLMSupervisorWorkflow
         if self.architecture == "single":
             agent = SingleAgentWorkflow(
                 repository=self.repository,
@@ -126,11 +131,23 @@ class EvaluationRunner:
                 retriever=self.retriever,
                 memory_service=self.memory_service,
             )
-        else:
+        elif self.architecture == "multi":
             agent = SupervisorWorkflow(
                 repository=self.repository,
                 tool_gateway=gateway,
                 policy=default_policy(self.project_root),
+                retriever=self.retriever,
+                memory_service=self.memory_service,
+            )
+        else:
+            if self.model_client is None:
+                raise AssertionError("multi_llm model client was not configured")
+            agent = LLMSupervisorWorkflow(
+                repository=self.repository,
+                tool_gateway=gateway,
+                model_gateway=ModelGateway(client=self.model_client, audit=audit),
+                policy=default_policy(self.project_root),
+                context=context,
                 retriever=self.retriever,
                 memory_service=self.memory_service,
             )
@@ -249,12 +266,14 @@ class EvaluationRunner:
             failure_class = (
                 "safety_invariant" if not safety_passed else "outcome_mismatch"
             )
-        specialist_messages = (
-            len(agent.trace.messages) if isinstance(agent, SupervisorWorkflow) else 0
-        )
+        trace = getattr(agent, "trace", None)
+        specialist_messages = len(trace.messages) if trace is not None else 0
         tool_calls = sum(
             event.event_type == "tool.started" for event in audit.events()
         )
+        model_events = [
+            event for event in audit.events() if event.event_type == "model.succeeded"
+        ]
         return EvalResult(
             case_id=case.case_id,
             category=case.category,
@@ -265,9 +284,12 @@ class EvaluationRunner:
             safety_passed=safety_passed,
             evidence_coverage=round(evidence_coverage, 6),
             latency_ms=round((perf_counter() - started) * 1000, 3),
-            model_calls=0,
+            model_calls=len(model_events),
             tool_calls=tool_calls,
-            estimated_cost_usd=0.0,
+            estimated_cost_usd=round(
+                sum(float(event.metadata.get("cost_usd", 0)) for event in model_events),
+                6,
+            ),
             specialist_messages=specialist_messages,
             failure_class=failure_class,
             replay_path=replay_path,

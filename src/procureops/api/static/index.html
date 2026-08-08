@@ -14,6 +14,10 @@
         <div><strong>ProcureOps</strong><small>采购任务工作台</small></div>
       </div>
       <button id="new-task-button" class="primary full">＋ 新建采购任务</button>
+      <div class="side-tools">
+        <button id="memory-button" class="side-tool">用户记忆 <span>确认与纠错</span></button>
+        <button id="governance-button" class="side-tool">进化治理 <span>评测与发布</span></button>
+      </div>
       <div class="side-heading"><span>任务队列</span><button id="refresh-button" class="icon" title="刷新">↻</button></div>
       <div id="task-list" class="task-list"><div class="empty">正在加载任务…</div></div>
       <div class="system-card">
@@ -26,7 +30,7 @@
       <header class="topbar">
         <div><span class="eyebrow">TENANT</span><strong>工程机械配件采购</strong></div>
         <div class="top-actions">
-          <span class="role">采购员 · 审批演示角色</span>
+          <span id="model-status" class="role">模型配置检测中…</span>
           <button id="worker-button" class="secondary">运行下一项 Worker</button>
         </div>
       </header>
@@ -45,7 +49,7 @@
 
       <section id="detail-view" class="detail hidden">
         <div class="detail-head">
-          <div><span class="eyebrow">PROCUREMENT TASK</span><h1 id="detail-title">采购任务</h1><code id="detail-id"></code></div>
+          <div><span class="eyebrow">PROCUREMENT TASK</span><h1 id="detail-title">采购任务</h1><code id="detail-id"></code><span id="detail-architecture" class="architecture"></span></div>
           <span id="detail-status" class="status"></span>
         </div>
         <div class="metrics">
@@ -83,11 +87,47 @@
     <form method="dialog" id="new-task-form">
       <div class="dialog-head"><div><span class="eyebrow">NEW TASK</span><h2>新建采购任务</h2></div><button value="cancel" class="icon">×</button></div>
       <label>自然语言采购需求<textarea id="task-text" rows="7" placeholder="例如：采购 2 件液压泵，零件号 HM-HYD-001，适配 EX200-A，单位件。"></textarea></label>
+      <label>Agent 架构
+        <select id="task-architecture">
+          <option value="single">单 Agent + 工具（默认）</option>
+          <option value="multi">Supervisor + 确定性专业 Agent</option>
+          <option value="multi_llm">Supervisor + 模型专业 Agent（会产生模型调用）</option>
+        </select>
+      </label>
       <div class="or"><span>或上传业务文件</span></div>
       <label class="drop"><input id="task-file" type="file" accept=".txt,.md,.csv,.pdf,.xlsx,.xlsm,.png,.jpg,.jpeg,.webp"><strong>PDF / Excel / 图片 / 文本</strong><span>最大 10 MiB，原文件按租户隔离保存并计算 SHA-256</span></label>
       <p id="form-error" class="error"></p>
       <div class="dialog-actions"><button value="cancel" class="secondary">取消</button><button id="submit-task" value="default" class="primary">创建并进入队列</button></div>
     </form>
+  </dialog>
+
+  <dialog id="memory-dialog" class="workbench-dialog">
+    <div class="dialog-sheet">
+      <div class="dialog-head"><div><span class="eyebrow">USER MEMORY</span><h2>用户记忆中心</h2></div><button class="icon dialog-close">×</button></div>
+      <p class="dialog-copy">Agent 只提出非敏感偏好候选；确认后才会在下一任务中使用，并产生字段级证据。你可以纠错、删除，记录也会按 TTL 过期。</p>
+      <div id="memory-list" class="governance-list"><div class="empty">正在读取…</div></div>
+    </div>
+  </dialog>
+
+  <dialog id="governance-dialog" class="workbench-dialog wide-dialog">
+    <div class="dialog-sheet">
+      <div class="dialog-head"><div><span class="eyebrow">GOVERNED EVOLUTION</span><h2>受治理的持续进化</h2></div><button class="icon dialog-close">×</button></div>
+      <p class="dialog-copy">生产反馈只能形成候选。Prompt 必须经过离线评测、合规审批和人工发布；系统禁止在线自动改 Prompt、规则或代码。</p>
+      <div class="governance-grid">
+        <section class="governance-card"><span class="eyebrow">ACTIVE RELEASE</span><div id="active-prompt"></div></section>
+        <section class="governance-card"><span class="eyebrow">MODEL ROUTING</span><div id="model-routing"></div></section>
+      </div>
+      <form id="feedback-form" class="inline-form">
+        <h3>提交反馈</h3>
+        <select id="feedback-type"><option value="correction">字段纠错</option><option value="preference">偏好反馈</option><option value="failure">失败案例</option><option value="rating">评分说明</option></select>
+        <input id="feedback-summary" maxlength="2000" placeholder="例如：中文数量“二”应稳定提取为 2" required>
+        <button class="secondary">保存反馈</button>
+      </form>
+      <div class="governance-columns">
+        <section><div class="panel-head"><div><span class="eyebrow">FEEDBACK</span><h2>待处理反馈</h2></div></div><div id="feedback-list" class="governance-list"></div></section>
+        <section><div class="panel-head"><div><span class="eyebrow">CANDIDATES</span><h2>Prompt 候选</h2></div><button id="new-candidate-button" class="secondary compact">从反馈创建</button></div><div id="candidate-list" class="governance-list"></div></section>
+      </div>
+    </div>
   </dialog>
   <div id="toast" class="toast"></div>
   <script src="/static/app.js"></script>

@@ -36,6 +36,18 @@
 
 回答重点：模型只能提出 candidate；只有用户确认后才可读。记忆按租户和用户隔离，支持纠错链、删除和 TTL；敏感键与审批阈值等硬规则根本不能写入。对应 `tests/integration/test_memory.py`。
 
+## “自主进化”会不会让生产系统失控？
+
+回答重点：这里不是在线自改代码。反馈只能形成带基线版本和来源哈希的候选；候选必须经过离线安全门禁、`compliance_approver` 人审和人工发布，新任务才读取它。每个版本可回滚，采购员不能单独上线。对应 `tests/integration/test_governed_evolution.py`。
+
+## 模型多 Agent 是否真的调用了模型？
+
+回答重点：`multi_llm` 的四个专业 Agent 都通过 Model Gateway 调用模型，并生成预算、重试和审计事件；但是输出只有 advisory 权限。100 条 FakeModel 对照产生 318 次真实 Harness 模型调用，没有质量收益，所以默认仍是单 Agent。对应 `tests/integration/test_llm_supervisor.py` 和 `reports/latest_llm_ab_comparison.json`。
+
+## 如何把 DeepSeek/智谱换成千问？
+
+回答重点：业务模块不绑定 Provider；统一 OpenAI-compatible 适配器读取 `AGENT_TEXT_PROVIDER` / `AGENT_VISION_PROVIDER`。设置为 `qwen` 并提供 `DASHSCOPE_API_KEY` 即可复用同一文本评测和视觉 smoke。当前本机没有千问 Key，所以只声明适配与 FakeTransport 通过，不伪造真实结果。
+
 ## 如何回放一次失败任务？
 
 回答重点：回放包冻结 RunContext 版本、工作流事件和工具审计，并对整个 Bundle 与每个事件载荷做哈希验证。预期内的永久故障也生成回放，篡改会导致验证失败。对应 `tests/unit/test_replay.py`。

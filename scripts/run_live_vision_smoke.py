@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import sys
@@ -29,8 +30,12 @@ OUTPUT = PROJECT_ROOT / "reports" / "latest_live_vision_smoke.json"
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--provider", choices=("zhipu", "qwen"))
+    parser.add_argument("--output", type=Path, default=OUTPUT)
+    args = parser.parse_args()
     load_environment(PROJECT_ROOT)
-    client = client_from_environment(kind="vision")
+    client = client_from_environment(kind="vision", provider_override=args.provider)
     audit = InMemoryAuditSink()
     context = RunContext(
         run_id=f"vision-smoke-{int(time.time() * 1000)}",
@@ -82,7 +87,8 @@ def main() -> None:
         "cost_usd": float(metadata.get("cost_usd", 0)),
         "extracted": [line.model_dump(mode="json") for line in lines],
     }
-    OUTPUT.write_text(
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
         json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )

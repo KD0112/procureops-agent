@@ -18,6 +18,7 @@ from procureops.harness.model_gateway import ModelGateway
 from procureops.harness.provider_clients import client_from_environment
 from procureops.intake import IntakeService
 from procureops.intake.model_extractors import GatewayTextExtractor, GatewayVisionExtractor
+from procureops.memory import detect_preference_candidates
 from procureops.runtime import ProcureOpsRuntime
 from procureops.worker.queue import Job
 
@@ -72,15 +73,42 @@ class ProcureOpsWorker:
             run_id=str(payload.get("run_id", f"job-{job.job_id}")),
             correlation_id=str(payload.get("correlation_id", job.job_id)),
         )
-        agent = self.runtime.agent(audit=audit)
+        task = self.runtime.repository.get_task(
+            tenant_id=job.tenant_id,
+            task_id=job.task_id,
+        )
+        architecture = str(
+            payload.get("architecture", task.request.get("architecture", "single"))
+        )
+        agent = self.runtime.agent(
+            audit=audit,
+            architecture=architecture,
+            context=context,
+        )
         if job.job_type == "process_intake":
             intake = self._intake(payload, context=context, audit=audit)
+            self._propose_memory_candidates(payload=payload, context=context)
             result = agent.start(context=context, intake=intake)
         elif job.job_type == "resume_approval":
             approval = ApprovalGrant.model_validate(payload["approval"])
             result = agent.resume(context=context, approval=approval)
         else:
             raise PermanentToolError(f"unsupported job type: {job.job_type}")
+        trace = getattr(agent, "trace", None)
+        if trace is not None and (trace.messages or trace.unknown_phases):
+            self.runtime.repository.append_workflow_event(
+                tenant_id=job.tenant_id,
+                task_id=job.task_id,
+                event_type="supervisor.trace",
+                payload={
+                    "architecture": architecture,
+                    "messages": [
+                        message.model_dump(mode="json") for message in trace.messages
+                    ],
+                    "unknown_phases": list(trace.unknown_phases),
+                    "authoritative_workflow": "single_deterministic_v1",
+                },
+            )
         events = self.runtime.repository.workflow_events(
             tenant_id=job.tenant_id,
             task_id=job.task_id,
@@ -94,6 +122,8 @@ class ProcureOpsWorker:
         return {
             "task_id": job.task_id,
             "task_status": result.status.value,
+            "architecture": architecture,
+            "specialist_messages": len(trace.messages) if trace is not None else 0,
             "replay": replay.name,
         }
 
@@ -129,6 +159,9 @@ class ProcureOpsWorker:
         text_extractor = None
         vision_extractor = None
         if source_mode == "text":
+            active_prompt = self.runtime.evolution.active_prompt(
+                tenant_id=context.tenant_id
+            )
             text_extractor = GatewayTextExtractor(
                 gateway=ModelGateway(
                     client=client_from_environment(kind="text"),
@@ -136,6 +169,7 @@ class ProcureOpsWorker:
                 ),
                 context=context,
                 ledger=ledger,
+                instruction=active_prompt.prompt_text,
             )
         elif source_mode == "vision":
             vision_extractor = GatewayVisionExtractor(
@@ -150,3 +184,31 @@ class ProcureOpsWorker:
             vision_extractor=vision_extractor,
             text_extractor=text_extractor,
         )
+
+    def _propose_memory_candidates(self, *, payload: dict[str, Any], context) -> None:
+        source = payload.get("source", {})
+        if source.get("kind") != "text":
+            return
+        proposed_ids: list[str] = []
+        for candidate in detect_preference_candidates(str(source.get("text", ""))):
+            record = self.runtime.memory.propose(
+                tenant_id=context.tenant_id,
+                user_id=context.actor_id,
+                memory_key=candidate.memory_key,
+                value=candidate.value,
+                confidence=candidate.confidence,
+                proposed_by="preference_detector_v1",
+                source_hash=candidate.source_hash,
+            )
+            proposed_ids.append(record.record_id)
+        if proposed_ids:
+            self.runtime.repository.append_workflow_event(
+                tenant_id=context.tenant_id,
+                task_id=context.task_id,
+                event_type="memory.candidate_proposed",
+                payload={
+                    "record_ids": proposed_ids,
+                    "count": len(proposed_ids),
+                    "requires_user_confirmation": True,
+                },
+            )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import UTC, datetime, timedelta
@@ -51,6 +52,7 @@ class MemoryRecord(BaseModel):
     confirmed_at: datetime | None = None
     expires_at: datetime
     deleted_at: datetime | None = None
+    source_hash: str | None = None
 
 
 class MemoryService:
@@ -67,11 +69,39 @@ class MemoryService:
         confidence: float,
         proposed_by: str,
         ttl: timedelta = timedelta(days=90),
+        source_hash: str | None = None,
     ) -> MemoryRecord:
         self._validate_key(memory_key)
         if ttl <= timedelta(0) or ttl > timedelta(days=365):
             raise ValueError("memory TTL must be between 1 second and 365 days")
         now = datetime.now(UTC)
+        normalized_source_hash = source_hash or self._source_hash(
+            memory_key=memory_key,
+            value=value,
+            proposed_by=proposed_by,
+        )
+        with self.database.connect() as connection:
+            existing = connection.execute(
+                """
+                SELECT record_id FROM memory_records
+                WHERE tenant_id=? AND user_id=? AND memory_key=? AND source_hash=?
+                  AND status IN ('candidate', 'confirmed') AND expires_at>?
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (
+                    tenant_id,
+                    user_id,
+                    memory_key,
+                    normalized_source_hash,
+                    now.isoformat(),
+                ),
+            ).fetchone()
+        if existing is not None:
+            return self.get(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                record_id=existing["record_id"],
+            )
         record_id = str(uuid4())
         with self.database.transaction() as connection:
             connection.execute(
@@ -79,8 +109,8 @@ class MemoryService:
                 INSERT INTO memory_records(
                     record_id, tenant_id, user_id, memory_key, value_json,
                     status, sensitivity, confidence, proposed_by,
-                    created_at, expires_at
-                ) VALUES (?, ?, ?, ?, ?, 'candidate', 'non_sensitive', ?, ?, ?, ?)
+                    created_at, expires_at, source_hash
+                ) VALUES (?, ?, ?, ?, ?, 'candidate', 'non_sensitive', ?, ?, ?, ?, ?)
                 """,
                 (
                     record_id,
@@ -92,6 +122,7 @@ class MemoryService:
                     proposed_by,
                     now.isoformat(),
                     (now + ttl).isoformat(),
+                    normalized_source_hash,
                 ),
             )
         return self.get(tenant_id=tenant_id, user_id=user_id, record_id=record_id)
@@ -208,6 +239,42 @@ class MemoryService:
             if record.memory_key not in PROTECTED_POLICY_KEYS
         }
 
+    def list_records(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        status: str | None = None,
+    ) -> tuple[MemoryRecord, ...]:
+        now = datetime.now(UTC).isoformat()
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                UPDATE memory_records SET status='expired'
+                WHERE tenant_id=? AND user_id=?
+                  AND status IN ('candidate', 'confirmed') AND expires_at<=?
+                """,
+                (tenant_id, user_id, now),
+            )
+            query = (
+                "SELECT record_id FROM memory_records "
+                "WHERE tenant_id=? AND user_id=?"
+            )
+            parameters: list[Any] = [tenant_id, user_id]
+            if status is not None:
+                query += " AND status=?"
+                parameters.append(status)
+            query += " ORDER BY created_at DESC"
+            rows = connection.execute(query, parameters).fetchall()
+        return tuple(
+            self.get(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                record_id=row["record_id"],
+            )
+            for row in rows
+        )
+
     def active_records(
         self,
         *,
@@ -267,6 +334,7 @@ class MemoryService:
             deleted_at=(
                 datetime.fromisoformat(row["deleted_at"]) if row["deleted_at"] else None
             ),
+            source_hash=row["source_hash"],
         )
 
     @staticmethod
@@ -278,3 +346,13 @@ class MemoryService:
             raise ValueError("memory cannot override procurement policy")
         if any(re.search(pattern, normalized) for pattern in FORBIDDEN_KEY_PATTERNS):
             raise ValueError("sensitive memory key is prohibited")
+
+    @staticmethod
+    def _source_hash(*, memory_key: str, value: Any, proposed_by: str) -> str:
+        payload = json.dumps(
+            {"key": memory_key, "value": value, "proposed_by": proposed_by},
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()

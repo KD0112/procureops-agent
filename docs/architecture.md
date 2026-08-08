@@ -27,6 +27,8 @@ Harness
 - `rag`: 静态知识摄取、检索、ACL 和字段证据
 - `storage`: SQLite 本地实现与未来 PostgreSQL 实现
 - `evals`: 组件、轨迹、结果和安全评测
+- `memory`: 用户级偏好候选、确认、纠错、删除、TTL 和敏感字段限制
+- `evolution`: 反馈、Prompt 候选、离线门禁、合规审批、发布和回滚
 
 ## 3. 本机原生运行策略
 
@@ -51,3 +53,10 @@ RAG 不得包含：
 
 这些动态事实只能通过数据库或工具获得，并携带 `observed_at` 与 `valid_until`。
 
+## 5. 三种 Agent 架构
+
+- `single`：默认路径。一个编排器调用受类型约束的工具，最少延迟、最容易定位责任。
+- `multi`：Supervisor 路由到四个确定性专业审阅器，用于观察职责拆分是否改善可诊断性。
+- `multi_llm`：四个专业审阅器真正调用 Model Gateway，但输出仅为 advisory；确定性工作流仍是唯一决策权威。
+
+所有模式复用相同状态机、工具、RAG、记忆、审批和 PO 幂等实现，才能进行公平 A/B。

@@ -44,7 +44,14 @@ def load_environment(project_root: Path = PROJECT_ROOT) -> dict[str, str]:
 def public_environment_snapshot() -> dict[str, str]:
     """Return non-secret diagnostics suitable for logs and support bundles."""
     secret_markers = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
-    prefixes = ("PROCUREOPS_", "AGENT_", "DEEPSEEK_", "ZHIPU_")
+    prefixes = (
+        "PROCUREOPS_",
+        "AGENT_",
+        "DEEPSEEK_",
+        "ZHIPU_",
+        "QWEN_",
+        "DASHSCOPE_",
+    )
     snapshot: dict[str, str] = {}
     for key, value in os.environ.items():
         if not key.startswith(prefixes):

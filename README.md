@@ -9,8 +9,10 @@ ProcureOps Agent 是一个以采购任务为中心的企业 Agent 项目。第�
 - 已实现 Harness v1：运行上下文、模型/工具网关、分类重试、审批绑定、双层幂等、预算和追加式审计。
 - 已实现 SQLite 迁移、任务状态机、目录/供应商/报价/库存工具、Decimal 成本和 PO 草稿。
 - 已实现文本、Excel、PDF 和图片 Intake；模型提取通过可替换网关接入，CI 使用 FakeModel。
-- 已实现受治理 SQLite 混合 RAG 索引、字段证据、确认式用户记忆、审批暂停/恢复和任务回放。
-- 已建立 100 条端到端数据集，并运行单 Agent 与 Supervisor+专业 Agent A/B。
+- 已实现受治理 SQLite 混合 RAG 索引、字段证据、自动候选/确认式用户记忆、审批暂停/恢复和任务回放。
+- 已实现反馈 → Prompt 候选 → 离线门禁 → 合规审批 → 人工发布 → 回滚的受治理进化闭环。
+- 已建立 100 条端到端数据集，并运行单 Agent、确定性多 Agent、FakeModel 多 Agent 三路对照。
+- 已接入 DeepSeek、智谱与千问的 OpenAI-compatible Harness 适配；千问真实调用需配置 DashScope 密钥。
 - 当前 A/B 证据支持默认采用单 Agent；多 Agent 组件保留为实验路径。
 - 第二租户暂缓，但 Tenant Pack 接口保留。
 
@@ -43,7 +45,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 & ".\.venv\Scripts\python.exe" scripts\run_evaluation.py
 ```
 
-第一条命令完全不调用 LLM，会展示任务暂停审批和恢复后生成 PO 草稿。评测命令运行相同的 100 条用例并输出单/多 Agent 对照报告。
+第一条命令完全不调用 LLM，会展示任务暂停审批和恢复后生成 PO 草稿。评测命令运行相同的 100 条用例并输出三种 Agent 架构对照报告；模型多 Agent 使用 FakeModel，不调用付费 API。
 
 ## 文档入口
 
@@ -57,6 +59,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 - `docs/implementation-status.md`
 - `docs/demo-guide.md`
 - `docs/evaluation-results.md`
+- `docs/governed-evolution-and-models.md`
 
 ## Local task workbench (v0.2)
 
@@ -77,6 +80,9 @@ Paid/live models remain opt-in. The normal verification path is fully offline:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 & ".\.venv\Scripts\python.exe" scripts\run_live_model_eval.py --limit 10
 & ".\.venv\Scripts\python.exe" scripts\run_live_vision_smoke.py
+# 千问配置好 DASHSCOPE_API_KEY 后：
+& ".\.venv\Scripts\python.exe" scripts\run_live_model_eval.py --provider qwen --limit 10
+& ".\.venv\Scripts\python.exe" scripts\run_live_vision_smoke.py --provider qwen
 ```
 
 Interview assets are under `demo_assets/`; the eight-minute walkthrough is `docs/interview/demo-script.md`.
