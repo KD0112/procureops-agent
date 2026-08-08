@@ -77,7 +77,7 @@ def main() -> None:
             integrity_check == "ok"
             and foreign_key_violations == 0
             and all(index_checks.values())
-            and migrations[-1:] == ["006_enterprise_depth"]
+            and migrations[-1:] == ["007_passwordless_local_identity"]
         ),
     }
     output = PROJECT_ROOT / "reports" / "latest_sqlite_verification.json"

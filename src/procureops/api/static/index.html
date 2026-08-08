@@ -31,8 +31,8 @@
         <div><span class="eyebrow">TENANT</span><strong>工程机械配件采购</strong></div>
         <div class="top-actions">
           <span id="model-status" class="role">模型配置检测中…</span>
-          <span id="identity-status" class="role">未登录</span>
-          <button id="switch-account-button" class="secondary compact">切换账号</button>
+          <span id="identity-status" class="role">正在进入本机身份…</span>
+          <button id="switch-account-button" class="secondary compact">切换身份</button>
           <button id="worker-button" class="secondary">运行下一项 Worker</button>
         </div>
       </header>
@@ -132,21 +132,19 @@
     </div>
   </dialog>
 
-  <dialog id="login-dialog" class="login-dialog">
-    <form id="login-form">
-      <div class="dialog-head"><div><span class="eyebrow">LOCAL IDENTITY</span><h2>登录 ProcureOps</h2></div></div>
-      <p class="dialog-copy">角色由服务端租户成员关系签发，页面不能通过请求头伪造权限。采购申请人与审批人必须使用不同账号。</p>
-      <label>演示账号
-        <select id="login-email">
-          <option value="buyer@procureops.local">采购申请人 · buyer@procureops.local</option>
-          <option value="approver@procureops.local">部门审批人 · approver@procureops.local</option>
-          <option value="compliance@procureops.local">合规审批人 · compliance@procureops.local</option>
+  <dialog id="identity-dialog" class="identity-dialog">
+    <form id="identity-form">
+      <div class="dialog-head"><div><span class="eyebrow">LOCAL IDENTITY</span><h2>切换本机身份</h2></div><button type="button" class="icon dialog-close">×</button></div>
+      <p class="dialog-copy">本机演示不需要密码。角色仍由服务端租户成员表决定；采购任务的申请人与审批人必须是不同身份。</p>
+      <label>选择身份
+        <select id="identity-user-id">
+          <option value="local-buyer">采购申请人</option>
+          <option value="local-approver">部门审批人</option>
+          <option value="local-compliance">合规审批人</option>
         </select>
       </label>
-      <label>本机密码<input id="login-password" type="password" autocomplete="current-password" required></label>
-      <small class="login-hint">默认演示密码：ProcureOps-Demo-2026!（可用环境变量覆盖）</small>
-      <p id="login-error" class="error"></p>
-      <div class="dialog-actions"><button class="primary" type="submit">登录</button></div>
+      <p id="identity-error" class="error"></p>
+      <div class="dialog-actions"><button class="primary" type="submit">使用此身份</button></div>
     </form>
   </dialog>
   <div id="toast" class="toast"></div>

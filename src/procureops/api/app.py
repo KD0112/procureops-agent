@@ -82,9 +82,10 @@ class PromptCandidateRequest(BaseModel):
     feedback_ids: tuple[str, ...] = Field(min_length=1, max_length=100)
 
 
-class LoginRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=320)
-    password: str = Field(min_length=1, max_length=256)
+class LocalSessionRequest(BaseModel):
+    user_id: str = Field(
+        pattern="^(local-buyer|local-approver|local-compliance)$"
+    )
     tenant_id: str = DEFAULT_TENANT
 
 
@@ -136,7 +137,7 @@ def create_app(
     )
     app = FastAPI(
         title="ProcureOps Agent API",
-        version="0.4.0",
+        version="0.4.1",
         description=(
             "Task-first procurement workbench with governed memory, evolution, "
             "multi-agent experiments, and Harness controls."
@@ -154,16 +155,15 @@ def create_app(
     def health() -> dict[str, str]:
         return {"status": "ok", "storage": "sqlite", "worker": "durable-local"}
 
-    @app.post("/api/auth/login")
-    def login(request: LoginRequest) -> dict[str, Any]:
+    @app.post("/api/auth/local-session")
+    def create_local_session(request: LocalSessionRequest) -> dict[str, Any]:
         try:
-            session = runtime.auth.login(
-                email=request.email,
-                password=request.password,
+            session = runtime.auth.create_local_session(
+                user_id=request.user_id,
                 tenant_id=request.tenant_id,
             )
-        except PermissionError as exc:
-            raise HTTPException(status_code=401, detail=str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         return session.model_dump(mode="json")
 
     @app.get("/api/auth/me")

@@ -71,9 +71,8 @@ textarea, select, input { width: 100%; padding: 12px 14px; border: 1px solid #cb
 .mini-status.deleted, .mini-status.rolled_back, .mini-status.rejected { color: #972c34; background: #fbecee; }
 .item-actions { display: flex !important; justify-content: flex-start !important; gap: 7px; margin-top: 12px; }
 .compact { width: auto; padding: 7px 10px; font-size: 11px; }
-.login-dialog { width: min(520px, calc(100vw - 32px)); }
-.login-dialog form { padding: 32px; }
-.login-hint { display: block; margin-top: 12px; color: var(--muted); line-height: 1.6; }
+.identity-dialog { width: min(520px, calc(100vw - 32px)); }
+.identity-dialog form { padding: 32px; }
 
 @media (max-width: 900px) {
   .governance-grid, .governance-columns { grid-template-columns: 1fr; }

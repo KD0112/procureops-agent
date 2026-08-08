@@ -74,13 +74,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 
 The UI, API and worker share the same SQLite repository, state machine, durable queue and Harness. Use the workbench button to process one job at a time, or run a continuous worker in another terminal:
 
-首次打开会要求使用本机演示账号登录。默认密码为 `ProcureOps-Demo-2026!`，可通过 `PROCUREOPS_DEMO_PASSWORD` 覆盖：
+首次打开会自动使用本机“采购申请人”身份，不需要密码。需要审批或发布 Prompt 时，点击右上角“切换身份”：
 
 - `buyer@procureops.local`：创建采购任务；
 - `approver@procureops.local`：审批普通/部门采购；
 - `compliance@procureops.local`：合规审批与 Prompt 发布。
 
-采购任务必须由另一个账号审批，借此演示 maker-checker 职责分离。
+采购任务必须由另一个本机身份审批，借此演示 maker-checker 职责分离。这个免密码身份选择器只面向单机演示；部署到企业环境时应替换为公司 SSO/OIDC。
 
 ```powershell
 & ".\.venv\Scripts\python.exe" scripts\run_worker.py --loop

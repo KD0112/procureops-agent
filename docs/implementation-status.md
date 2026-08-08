@@ -17,7 +17,7 @@
 | 千问文本/视觉 | 已实现路由适配 | `harness/provider_clients.py`、`model_router.py` | DashScope 文本/视觉、Qwen 优先、DeepSeek/Zhipu 降级、熔断与 FakeTransport 测试；本机尚无千问密钥 |
 | Supplier Research Agent | 已实现受限循环 | `agents/supplier_research.py` | 最多 3 步、只读物流工具白名单、越权动作降级、确定性最终决策测试 |
 | 动态物流 | 已实现 | `logistics_quotes`、`logistics_quote` 工具 | 租户隔离、时效、证据、Decimal 运费覆盖与索引计划测试 |
-| 本地身份与职责分离 | 已实现 | `auth/`、Bearer API、网站登录 | PBKDF2、服务端角色、过期/注销、请求头伪造拒绝和 maker-checker 测试 |
+| 本地身份与职责分离 | 已实现免密码本机模式 | `auth/`、Bearer 会话、网站身份切换 | 自动采购人身份、服务端角色、会话过期/注销、请求头伪造拒绝和 maker-checker 测试 |
 | 事务 Outbox | 已实现 | `worker/outbox.py`、迁移 006 | 任务/上传/工作意图原子写入、幂等投递、dispatching 崩溃恢复测试 |
 | 第二租户 | 按要求暂缓 | Tenant Pack 接口已保留 | 后续跨行业验收 |
 

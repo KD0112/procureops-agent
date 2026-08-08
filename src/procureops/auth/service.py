@@ -1,18 +1,14 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import NamedTuple
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
 
 from procureops.storage import SQLiteDatabase
-
-PASSWORD_ITERATIONS = 310_000
 
 
 class AuthIdentity(BaseModel):
@@ -33,18 +29,13 @@ class AuthSession(BaseModel):
     identity: AuthIdentity
 
 
-class _PasswordDigest(NamedTuple):
-    salt: str
-    digest: str
-
-
 class AuthService:
-    """Small local identity provider; API roles always come from server-side membership."""
+    """Passwordless local identities with server-side tenant role resolution."""
 
     def __init__(self, database: SQLiteDatabase) -> None:
         self.database = database
 
-    def bootstrap_demo_users(self, *, tenant_id: str, password: str) -> None:
+    def bootstrap_demo_users(self, *, tenant_id: str) -> None:
         demo_users = (
             (
                 "local-buyer",
@@ -82,7 +73,6 @@ class AuthService:
                 user_id=user_id,
                 email=email,
                 display_name=display_name,
-                password=password,
                 tenant_id=tenant_id,
                 roles=roles,
                 if_missing=True,
@@ -94,38 +84,23 @@ class AuthService:
         user_id: str,
         email: str,
         display_name: str,
-        password: str,
         tenant_id: str,
         roles: frozenset[str],
         if_missing: bool = False,
     ) -> AuthIdentity:
-        if len(password) < 12:
-            raise ValueError("local password must contain at least 12 characters")
         if not roles:
             raise ValueError("at least one tenant role is required")
-        digest = self._password_digest(password)
         now = datetime.now(UTC).isoformat()
         with self.database.transaction() as connection:
-            if if_missing:
-                connection.execute(
-                    """
-                    INSERT OR IGNORE INTO local_users(
-                        user_id, email, display_name, password_salt,
-                        password_hash, active, created_at
-                    ) VALUES (?, ?, ?, ?, ?, 1, ?)
-                    """,
-                    (user_id, email.casefold(), display_name, digest.salt, digest.digest, now),
-                )
-            else:
-                connection.execute(
-                    """
-                    INSERT INTO local_users(
-                        user_id, email, display_name, password_salt,
-                        password_hash, active, created_at
-                    ) VALUES (?, ?, ?, ?, ?, 1, ?)
-                    """,
-                    (user_id, email.casefold(), display_name, digest.salt, digest.digest, now),
-                )
+            insert = "INSERT OR IGNORE" if if_missing else "INSERT"
+            connection.execute(
+                f"""
+                {insert} INTO local_users(
+                    user_id, email, display_name, active, created_at
+                ) VALUES (?, ?, ?, 1, ?)
+                """,
+                (user_id, email.casefold(), display_name, now),
+            )
             connection.execute(
                 """
                 INSERT INTO tenant_memberships(
@@ -138,31 +113,15 @@ class AuthService:
             )
         return self.identity(user_id=user_id, tenant_id=tenant_id)
 
-    def login(
+    def create_local_session(
         self,
         *,
-        email: str,
-        password: str,
+        user_id: str,
         tenant_id: str,
         ttl: timedelta = timedelta(hours=8),
     ) -> AuthSession:
+        identity = self.identity(user_id=user_id, tenant_id=tenant_id)
         now = datetime.now(UTC)
-        with self.database.connect() as connection:
-            row = connection.execute(
-                """
-                SELECT u.user_id, u.password_salt, u.password_hash
-                FROM local_users AS u
-                JOIN tenant_memberships AS m ON m.user_id=u.user_id
-                WHERE u.email=? AND u.active=1 AND m.tenant_id=? AND m.active=1
-                """,
-                (email.casefold().strip(), tenant_id),
-            ).fetchone()
-        if row is None or not self._verify_password(
-            password,
-            salt=row["password_salt"] if row else "0" * 32,
-            expected=row["password_hash"] if row else "0" * 64,
-        ):
-            raise PermissionError("invalid local credentials")
         token = secrets.token_urlsafe(32)
         expires_at = now + ttl
         with self.database.transaction() as connection:
@@ -175,18 +134,14 @@ class AuthService:
                 """,
                 (
                     str(uuid4()),
-                    row["user_id"],
-                    tenant_id,
+                    identity.user_id,
+                    identity.tenant_id,
                     self._token_hash(token),
                     now.isoformat(),
                     expires_at.isoformat(),
                 ),
             )
-        return AuthSession(
-            token=token,
-            expires_at=expires_at,
-            identity=self.identity(user_id=row["user_id"], tenant_id=tenant_id),
-        )
+        return AuthSession(token=token, expires_at=expires_at, identity=identity)
 
     def resolve(self, *, token: str) -> AuthIdentity:
         now = datetime.now(UTC).isoformat()
@@ -233,22 +188,6 @@ class AuthService:
             display_name=row["display_name"],
             roles=frozenset(json.loads(row["roles_json"])),
         )
-
-    @staticmethod
-    def _password_digest(password: str, *, salt: str | None = None) -> _PasswordDigest:
-        normalized_salt = salt or secrets.token_hex(16)
-        digest = hashlib.pbkdf2_hmac(
-            "sha256",
-            password.encode("utf-8"),
-            bytes.fromhex(normalized_salt),
-            PASSWORD_ITERATIONS,
-        ).hex()
-        return _PasswordDigest(normalized_salt, digest)
-
-    @classmethod
-    def _verify_password(cls, password: str, *, salt: str, expected: str) -> bool:
-        actual = cls._password_digest(password, salt=salt).digest
-        return hmac.compare_digest(actual, expected)
 
     @staticmethod
     def _token_hash(token: str) -> str:

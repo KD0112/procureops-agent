@@ -9,7 +9,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 ```
 
 验收输出应包含知识文档校验、Ruff 通过、测试通过和覆盖率不低于 90%。普通验证不调用真实 API。
-脚本还会执行 SQLite `integrity_check`、外键检查、六个迁移版本校验以及物流、记忆、会话、Outbox 四条查询的 `EXPLAIN QUERY PLAN`。
+脚本还会执行 SQLite `integrity_check`、外键检查、七个迁移版本校验以及物流、记忆、会话、Outbox 四条查询的 `EXPLAIN QUERY PLAN`。
 
 ## 2. 两分钟 Happy Path
 
@@ -39,8 +39,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 
 演示顺序：
 
-1. 使用 `buyer@procureops.local` / `ProcureOps-Demo-2026!` 登录，新建“单 Agent + 工具”任务并运行 Worker。
-2. 待审批后切换到 `approver@procureops.local`（相同默认密码）批准，再运行 Worker，展示 maker-checker、证据和 PO 草稿。
+1. 打开页面后系统自动进入“采购申请人”身份；新建“单 Agent + 工具”任务并运行 Worker。
+2. 待审批后点击“切换身份”，选择“部门审批人”批准，再运行 Worker，展示 maker-checker、证据和 PO 草稿。整个本机演示不需要密码。
 3. 输入“以后供应商优先比较交期”，运行后打开“用户记忆”，确认候选；下一任务会以交期策略选择供应商并记录物流证据。
 4. 打开“进化治理”，提交纠错反馈，从反馈创建候选，运行 20 条 Gold Set 基线/候选回归；切换合规账号审批、发布并演示回滚。
 5. 再以“确定性多 Agent”创建任务，在时间线查看 `supervisor.trace`。

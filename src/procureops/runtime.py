@@ -66,10 +66,6 @@ class ProcureOpsRuntime:
         auth = AuthService(database)
         auth.bootstrap_demo_users(
             tenant_id="tenant_engineering_machinery",
-            password=os.environ.get(
-                "PROCUREOPS_DEMO_PASSWORD",
-                "ProcureOps-Demo-2026!",
-            ),
         )
         database.optimize()
         queue = SQLiteWorkQueue(database)

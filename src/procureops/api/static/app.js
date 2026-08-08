@@ -14,14 +14,25 @@ async function api(path, options = {}) {
   const auth = state.token ? { Authorization: `Bearer ${state.token}` } : {};
   const response = await fetch(path, { ...options, headers: { ...auth, ...(options.headers || {}) } });
   const payload = await response.json().catch(() => ({}));
-  if (response.status === 401 && path !== "/api/auth/login") showLogin();
+  if (response.status === 401 && path !== "/api/auth/local-session") {
+    state.token = null; window.sessionStorage.removeItem("procureops_token");
+  }
   if (!response.ok) throw new Error(payload.detail || `请求失败：${response.status}`);
   return payload;
 }
 
-function showLogin() {
-  const dialog = $("#login-dialog");
+function openIdentityDialog() {
+  const dialog = $("#identity-dialog");
   if (!dialog.open) dialog.showModal();
+}
+
+async function startLocalSession(userId) {
+  const session = await api("/api/auth/local-session", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: userId, tenant_id: "tenant_engineering_machinery" }),
+  });
+  state.token = session.token; window.sessionStorage.setItem("procureops_token", session.token);
+  await loadIdentity();
 }
 
 async function loadIdentity() {
@@ -30,14 +41,16 @@ async function loadIdentity() {
 }
 
 async function bootstrap() {
-  if (!state.token) { showLogin(); return; }
   try {
-    await loadIdentity();
+    if (!state.token) await startLocalSession("local-buyer"); else await loadIdentity();
     await Promise.all([loadTasks(), loadModelStatus()]);
   } catch (error) {
     state.token = null; state.identity = null;
     window.sessionStorage.removeItem("procureops_token");
-    showLogin(); toast(error.message);
+    try {
+      await startLocalSession("local-buyer");
+      await Promise.all([loadTasks(), loadModelStatus()]);
+    } catch (fallbackError) { openIdentityDialog(); toast(fallbackError.message || error.message); }
   }
 }
 
@@ -238,22 +251,17 @@ $("#new-task-form").addEventListener("submit", async (event) => {
 });
 
 function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]); }
-$("#login-form").addEventListener("submit", async (event) => {
-  event.preventDefault(); $("#login-error").textContent = "";
+$("#identity-form").addEventListener("submit", async (event) => {
+  event.preventDefault(); $("#identity-error").textContent = "";
   try {
-    const session = await api("/api/auth/login", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: $("#login-email").value, password: $("#login-password").value, tenant_id: "tenant_engineering_machinery" }),
-    });
-    state.token = session.token; window.sessionStorage.setItem("procureops_token", session.token);
-    $("#login-password").value = ""; $("#login-dialog").close();
-    await loadIdentity(); await Promise.all([loadTasks(), loadModelStatus()]); toast("已使用服务端身份登录");
-  } catch (error) { $("#login-error").textContent = error.message; }
+    await startLocalSession($("#identity-user-id").value); $("#identity-dialog").close();
+    await Promise.all([loadTasks(), loadModelStatus()]); toast("本机身份已切换");
+  } catch (error) { $("#identity-error").textContent = error.message; }
 });
 $("#switch-account-button").addEventListener("click", async () => {
   try { if (state.token) await api("/api/auth/logout", { method: "POST" }); } catch {}
   state.token = null; state.identity = null; window.sessionStorage.removeItem("procureops_token");
-  $("#identity-status").textContent = "未登录"; showLogin();
+  $("#identity-status").textContent = "请选择本机身份"; openIdentityDialog();
 });
 $("#feedback-form").addEventListener("submit", async (event) => { event.preventDefault(); const summary = $("#feedback-summary").value.trim(); if (!summary) return; try { await api("/api/governance/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback_type: $("#feedback-type").value, summary, correction: {} }) }); event.target.reset(); toast("反馈已进入治理队列"); await loadGovernance(); } catch (error) { toast(error.message); } });
 $("#memory-list").addEventListener("click", handleMemoryAction); $("#candidate-list").addEventListener("click", handleCandidateAction); $("#new-candidate-button").addEventListener("click", createCandidateFromFeedback);

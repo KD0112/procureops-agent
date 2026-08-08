@@ -7,19 +7,15 @@ from fastapi.testclient import TestClient
 from procureops.api import create_app
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEMO_PASSWORD = "ProcureOps-Demo-2026!"
-
-
 def _bearer(token: str, **extra: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}", **extra}
 
 
-def _login(client: TestClient, email: str) -> str:
+def _local_session(client: TestClient, user_id: str) -> str:
     response = client.post(
-        "/api/auth/login",
+        "/api/auth/local-session",
         json={
-            "email": email,
-            "password": DEMO_PASSWORD,
+            "user_id": user_id,
             "tenant_id": "tenant_engineering_machinery",
         },
     )
@@ -34,6 +30,24 @@ def test_server_side_identity_maker_checker_and_outbox_recovery(tmp_path: Path) 
         var_root=tmp_path / "var",
     )
     with TestClient(app) as client:
+        home = client.get("/").text
+        assert 'type="password"' not in home
+        assert "本机演示不需要密码" in home
+        assert client.post(
+            "/api/auth/login",
+            json={"email": "buyer@procureops.local", "password": "unused"},
+        ).status_code == 404
+        connection = app.state.runtime.database.connect()
+        try:
+            local_user_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(local_users)").fetchall()
+            }
+        finally:
+            connection.close()
+        assert "password_hash" not in local_user_columns
+        assert "password_salt" not in local_user_columns
+
         spoofed = {
             "X-Tenant-ID": "tenant_engineering_machinery",
             "X-Actor-ID": "spoofed-admin",
@@ -41,7 +55,7 @@ def test_server_side_identity_maker_checker_and_outbox_recovery(tmp_path: Path) 
         }
         assert client.get("/api/tasks", headers=spoofed).status_code == 401
 
-        buyer_token = _login(client, "buyer@procureops.local")
+        buyer_token = _local_session(client, "local-buyer")
         buyer_headers = _bearer(
             buyer_token,
             **{"X-Actor-Roles": "compliance_approver"},
@@ -86,7 +100,7 @@ def test_server_side_identity_maker_checker_and_outbox_recovery(tmp_path: Path) 
             json={"decision": "approve"},
         ).status_code == 403
 
-        approver_token = _login(client, "approver@procureops.local")
+        approver_token = _local_session(client, "local-approver")
         approved = client.post(
             f"/api/tasks/{task_id}/approval",
             headers=_bearer(approver_token),
