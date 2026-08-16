@@ -27,3 +27,11 @@ def test_saved_eval_dataset_matches_generator() -> None:
     )
 
     assert loaded == generate_cases()
+
+
+def test_cross_tenant_dataset_has_fixed_distribution() -> None:
+    cases = load_cases(PROJECT_ROOT / "data" / "eval_cases" / "cross_tenant_it_20.jsonl")
+
+    assert len(cases) == 20
+    assert sum(case.tenant_id == "tenant_enterprise_it" for case in cases) == 19
+    assert any(case.category == "cross_tenant_isolation" for case in cases)

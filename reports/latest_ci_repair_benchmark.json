@@ -1,0 +1,67 @@
+{
+  "generated_at": "2026-08-16T04:10:46.018740+00:00",
+  "cases": 5,
+  "metrics": {
+    "diagnosis_accuracy": 1.0,
+    "repair_test_gate": 1.0,
+    "approval_boundary": 1.0,
+    "source_isolation": 1.0
+  },
+  "diagnosis_cases": [
+    {
+      "expected": "test_failure",
+      "actual": "test_failure",
+      "status_ok": true
+    },
+    {
+      "expected": "syntax_error",
+      "actual": "syntax_error",
+      "status_ok": true
+    },
+    {
+      "expected": "dependency_error",
+      "actual": "dependency_error",
+      "status_ok": true
+    },
+    {
+      "expected": "lint_failure",
+      "actual": "lint_failure",
+      "status_ok": true
+    },
+    {
+      "expected": "timeout",
+      "actual": "timeout",
+      "status_ok": true
+    }
+  ],
+  "repair": {
+    "status": "needs_approval",
+    "diagnosis": {
+      "source": "ci_output",
+      "status": "failed",
+      "failure_kind": "test_failure",
+      "summary": "Detected test failure in the supplied CI excerpt.",
+      "failed_tests": [
+        "tests/test_hello.py::test_value"
+      ],
+      "evidence": [
+        "FAILED tests/test_hello.py::test_value - AssertionError"
+      ],
+      "repair_hints": [
+        "Read the failing test and implementation, then run the smallest relevant test before the full gate."
+      ],
+      "actionability": "patch_candidate"
+    },
+    "workflow": [
+      "diagnose_ci",
+      "plan_validated",
+      "workspace_patch",
+      "test_gate",
+      "diff_review",
+      "human_approval_gate"
+    ],
+    "test_returncode": 0,
+    "diff_sha256": "1c72294d6038381ace1fd644d40f6d123607f4ff08e353faca452ca16cd23ed3",
+    "source_unchanged": true
+  }
+}

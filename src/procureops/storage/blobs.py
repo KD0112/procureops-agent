@@ -39,14 +39,9 @@ class LocalBlobStore:
         content_type: str,
         data: bytes,
     ) -> StoredBlob:
-        if len(data) > self.max_bytes:
-            raise ValueError(f"upload exceeds {self.max_bytes} bytes")
+        safe_filename = self.validate_upload(filename=filename, data=data)
         safe_tenant = _safe_segment(tenant_id)
         safe_task = _safe_segment(task_id)
-        safe_filename = _safe_filename(filename)
-        suffix = Path(safe_filename).suffix.casefold()
-        if suffix not in ALLOWED_EXTENSIONS:
-            raise ValueError(f"unsupported upload extension: {suffix}")
         storage_name = f"{uuid4().hex}-{safe_filename}"
         directory = (self.root / safe_tenant / safe_task).resolve()
         if self.root not in directory.parents:
@@ -68,6 +63,15 @@ class LocalBlobStore:
             size_bytes=len(data),
             sha256=hashlib.sha256(data).hexdigest(),
         )
+
+    def validate_upload(self, *, filename: str, data: bytes) -> str:
+        if len(data) > self.max_bytes:
+            raise ValueError(f"upload exceeds {self.max_bytes} bytes")
+        safe_filename = _safe_filename(filename)
+        suffix = Path(safe_filename).suffix.casefold()
+        if suffix not in ALLOWED_EXTENSIONS:
+            raise ValueError(f"unsupported upload extension: {suffix}")
+        return safe_filename
 
     def resolve(self, storage_key: str) -> Path:
         candidate = (self.root / storage_key).resolve()

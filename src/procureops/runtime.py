@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from procureops.agents import LLMSupervisorWorkflow, SingleAgentWorkflow, SupervisorWorkflow
-from procureops.agents.single import default_policy
+from procureops.agents.single import policy_for_tenant
 from procureops.auth import AuthService
 from procureops.config import load_environment
 from procureops.demo import seed_demo_database
@@ -15,11 +15,15 @@ from procureops.evolution import EvolutionService
 from procureops.harness.audit import AuditSink
 from procureops.harness.provider_clients import routed_gateway_from_environment
 from procureops.harness.tool_gateway import ToolGateway
+from procureops.integrations import IntegrationSuiteFactory
+from procureops.integrations.research import research_connector_from_environment
 from procureops.memory import MemoryService
-from procureops.rag import HashingEmbeddingProvider, SQLiteKnowledgeIndex
+from procureops.observability import LangfuseTracer
+from procureops.rag import SQLiteKnowledgeIndex, embedding_provider_from_environment
 from procureops.rag.governance import scan_knowledge_base
 from procureops.storage import ProcureOpsRepository, SQLiteDatabase
 from procureops.storage.blobs import LocalBlobStore
+from procureops.tenancy import TenantPackRegistry
 from procureops.tools import register_procurement_tools
 from procureops.worker.outbox import SQLiteOutbox
 from procureops.worker.queue import SQLiteWorkQueue
@@ -37,8 +41,12 @@ class ProcureOpsRuntime:
     memory: MemoryService
     auth: AuthService
     evolution: EvolutionService
+    tenants: TenantPackRegistry
+    integrations: IntegrationSuiteFactory
     audit_path: Path
     replay_root: Path
+    var_root: Path
+    observability: LangfuseTracer
 
     @classmethod
     def create(
@@ -54,19 +62,22 @@ class ProcureOpsRuntime:
         runtime_root.mkdir(parents=True, exist_ok=True)
         database = SQLiteDatabase(database_path or runtime_root / "procureops.sqlite3")
         repository = seed_demo_database(database, project_root=project_root)
+        tenants = TenantPackRegistry(project_root / "data" / "tenant_packs")
         retriever = SQLiteKnowledgeIndex(
-            path=runtime_root / "rag" / "engineering_machinery.sqlite3",
-            embedding_provider=HashingEmbeddingProvider(dimensions=256),
+            path=runtime_root / "rag" / "multi_tenant.sqlite3",
+            embedding_provider=embedding_provider_from_environment(),
         )
         documents = scan_knowledge_base(project_root / "knowledge")
+        uploaded_knowledge_root = runtime_root / "knowledge_uploads"
+        if uploaded_knowledge_root.exists():
+            documents.extend(scan_knowledge_base(uploaded_knowledge_root))
         if not retriever.is_current(documents):
             retriever.rebuild(documents)
         evolution = EvolutionService(database)
-        evolution.bootstrap_baseline(tenant_id="tenant_engineering_machinery")
         auth = AuthService(database)
-        auth.bootstrap_demo_users(
-            tenant_id="tenant_engineering_machinery",
-        )
+        for pack in tenants.all():
+            evolution.bootstrap_baseline(tenant_id=pack.tenant.tenant_id)
+            auth.bootstrap_demo_users(tenant_id=pack.tenant.tenant_id)
         database.optimize()
         queue = SQLiteWorkQueue(database)
         return cls(
@@ -80,8 +91,15 @@ class ProcureOpsRuntime:
             memory=MemoryService(database),
             auth=auth,
             evolution=evolution,
+            tenants=tenants,
+            integrations=IntegrationSuiteFactory(
+                repository=repository,
+                tenants=tenants,
+            ),
             audit_path=runtime_root / "audit.jsonl",
             replay_root=runtime_root / "replays" / "api",
+            var_root=runtime_root,
+            observability=LangfuseTracer.from_environment(),
         )
 
     def agent(
@@ -93,12 +111,19 @@ class ProcureOpsRuntime:
     ) -> SingleAgentWorkflow | SupervisorWorkflow | LLMSupervisorWorkflow:
         if architecture not in {"single", "multi", "multi_llm"}:
             raise ValueError("architecture must be single, multi, or multi_llm")
+        tenant_id = context.tenant_id if context is not None else "tenant_engineering_machinery"
         gateway = ToolGateway(audit=audit)
-        register_procurement_tools(gateway, self.repository)
+        research_connector = research_connector_from_environment(self.project_root)
+        register_procurement_tools(
+            gateway,
+            self.repository,
+            integrations=self.integrations.for_tenant(tenant_id),
+            research_connector=research_connector,
+        )
         common = {
             "repository": self.repository,
             "tool_gateway": gateway,
-            "policy": default_policy(self.project_root),
+            "policy": policy_for_tenant(self.project_root, tenant_id),
             "retriever": self.retriever,
             "memory_service": self.memory,
         }
@@ -119,6 +144,9 @@ class ProcureOpsRuntime:
                     kind="text",
                     audit=audit,
                 ),
+                supplier_evidence_tool_name=(
+                    "supplier_evidence_search" if research_connector is not None else None
+                ),
             )
         return SingleAgentWorkflow(
             **common,
@@ -134,6 +162,7 @@ class ProcureOpsRuntime:
         run_id: str,
         correlation_id: str,
     ) -> RunContext:
+        pack = self.tenants.get(tenant_id)
         prompt = self.evolution.bootstrap_baseline(tenant_id=tenant_id)
         return RunContext(
             run_id=run_id,
@@ -141,11 +170,11 @@ class ProcureOpsRuntime:
             tenant_id=tenant_id,
             actor_id=actor_id,
             actor_roles=actor_roles,
-            workflow_version="1.0.0",
+            workflow_version="1.1.0",
             prompt_version=prompt.prompt_version,
             model_policy_version="1.0.0",
-            rule_set_version="1.0.0",
-            tenant_pack_version="1.0.0",
+            rule_set_version=pack.rules.version,
+            tenant_pack_version=pack.tenant.tenant_pack_version,
             deadline_at=datetime.now(UTC) + timedelta(minutes=5),
             budget=RunBudget(
                 max_model_calls=16,

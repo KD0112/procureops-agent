@@ -15,9 +15,14 @@ from procureops.harness.audit import (
 from procureops.harness.budget import RunBudgetLedger
 from procureops.harness.errors import PermanentToolError, TransientToolError
 from procureops.harness.provider_clients import routed_gateway_from_environment
-from procureops.intake import IntakeService
+from procureops.intake import (
+    IntakeService,
+    merge_intake_results,
+    relabel_intake_artifact,
+)
 from procureops.intake.model_extractors import GatewayTextExtractor, GatewayVisionExtractor
 from procureops.memory import detect_preference_candidates
+from procureops.rag.ingestion import DocumentIngestionService
 from procureops.runtime import ProcureOpsRuntime
 from procureops.worker.queue import Job
 
@@ -64,7 +69,11 @@ class ProcureOpsWorker:
     def _process(self, job: Job) -> dict[str, Any]:
         payload = job.payload
         memory_audit = InMemoryAuditSink()
-        audit = CompositeAuditSink(memory_audit, JsonlAuditSink(self.runtime.audit_path))
+        audit = CompositeAuditSink(
+            memory_audit,
+            JsonlAuditSink(self.runtime.audit_path),
+            self.runtime.observability.audit_sink(),
+        )
         context = self.runtime.context(
             tenant_id=job.tenant_id,
             task_id=job.task_id,
@@ -77,6 +86,8 @@ class ProcureOpsWorker:
             tenant_id=job.tenant_id,
             task_id=job.task_id,
         )
+        if job.job_type == "rag_ingest":
+            return self._process_rag_ingest(job, context=context)
         architecture = str(
             payload.get("architecture", task.request.get("architecture", "single"))
         )
@@ -127,6 +138,29 @@ class ProcureOpsWorker:
             "replay": replay.name,
         }
 
+    def _process_rag_ingest(self, job: Job, *, context) -> dict[str, Any]:
+        source = job.payload.get("source") or {}
+        service = DocumentIngestionService(
+            project_root=self.runtime.project_root,
+            var_root=self.runtime.var_root,
+            retriever=self.runtime.retriever,
+        )
+        outcome = service.ingest(
+            tenant_id=job.tenant_id,
+            task_id=job.task_id,
+            actor_id=context.actor_id,
+            uploads=list(source.get("items") or []),
+            blob_resolver=self.runtime.blobs.resolve,
+            approved_for_retrieval=bool(source.get("approved_for_retrieval", False)),
+        )
+        self.runtime.repository.append_workflow_event(
+            tenant_id=job.tenant_id,
+            task_id=job.task_id,
+            event_type="rag_ingest.completed",
+            payload=outcome,
+        )
+        return {"task_id": job.task_id, "task_status": outcome["status"], **outcome}
+
     def _intake(self, payload: dict[str, Any], *, context, audit):
         source = payload["source"]
         if source["kind"] == "text":
@@ -140,22 +174,59 @@ class ProcureOpsWorker:
                 artifact_id=str(source.get("artifact_id", "api-text")),
             )
         if source["kind"] == "upload":
-            path = self.runtime.blobs.resolve(str(source["storage_key"]))
-            service = self._intake_service(
-                source_mode="vision"
-                if path.suffix.casefold() in {".png", ".jpg", ".jpeg", ".webp"}
-                else "deterministic",
+            return self._intake_upload(
+                source,
                 context=context,
                 audit=audit,
             )
-            return service.from_file(path)
+        if source["kind"] == "uploads":
+            items = tuple(source.get("items", ()))
+            if not items:
+                raise PermanentToolError("upload bundle is empty")
+            shared_ledger = RunBudgetLedger(context)
+            results = tuple(
+                self._intake_upload(
+                    item,
+                    context=context,
+                    audit=audit,
+                    ledger=shared_ledger,
+                )
+                for item in items
+            )
+            return merge_intake_results(
+                results,
+                artifact_id=str(source.get("artifact_id", f"bundle-{context.task_id}")),
+            )
         raise PermanentToolError(f"unsupported intake source: {source['kind']}")
 
-    def _intake_service(self, *, source_mode: str, context, audit) -> IntakeService:
+    def _intake_upload(self, source: dict[str, Any], *, context, audit, ledger=None):
+        path = self.runtime.blobs.resolve(str(source["storage_key"]))
+        service = self._intake_service(
+            source_mode=(
+                "vision"
+                if path.suffix.casefold() in {".png", ".jpg", ".jpeg", ".webp"}
+                else "deterministic"
+            ),
+            context=context,
+            audit=audit,
+            ledger=ledger,
+        )
+        result = service.from_file(path)
+        original_filename = str(source.get("original_filename") or path.name)
+        return relabel_intake_artifact(result, artifact_id=original_filename)
+
+    def _intake_service(
+        self,
+        *,
+        source_mode: str,
+        context,
+        audit,
+        ledger: RunBudgetLedger | None = None,
+    ) -> IntakeService:
         load_environment(self.runtime.project_root)
         if os.environ.get("PROCUREOPS_ENABLE_LIVE_MODELS", "0") != "1":
             return IntakeService()
-        ledger = RunBudgetLedger(context)
+        ledger = ledger or RunBudgetLedger(context)
         text_extractor = None
         vision_extractor = None
         if source_mode == "text":

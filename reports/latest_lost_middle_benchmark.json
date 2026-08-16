@@ -1,0 +1,21 @@
+{
+  "baseline": {
+    "edge_accuracy": 1.0,
+    "max_position": 0.0,
+    "middle_accuracy": 0.0,
+    "middle_drop": 1.0
+  },
+  "interpretation": "The offline reader intentionally models a position-sensitive consumer. This validates the metric and packing harness, not a real LLM quality claim.",
+  "item_count": 9,
+  "position_aware": {
+    "answer_accuracy": 1.0,
+    "target_at_position": 0
+  },
+  "positions": [
+    0,
+    1,
+    4,
+    7,
+    8
+  ]
+}

@@ -29,12 +29,16 @@ Harness
 - `evals`: 组件、轨迹、结果和安全评测
 - `memory`: 用户级偏好候选、确认、纠错、删除、TTL 和敏感字段限制
 - `evolution`: 反馈、Prompt 候选、离线门禁、合规审批、发布和回滚
+- `tenancy`: Tenant Pack 发现、版本一致性、Schema 和适配器绑定
+- `integrations`: ERP、供应商和物流的本地/HTTP 可替换适配器与独立契约沙箱
 
 ## 3. 本机原生运行策略
 
 初期使用 SQLite、文件对象存储和 JSONL 审计，保证无需 Docker 即可运行。接口按照 PostgreSQL 和对象存储可替换方式设计。SQLite 不是最终企业部署结论，而是本地开发 Profile。
 
 长期审批和恢复先通过数据库事件历史实现；当需要跨机器 Worker 时，再增加原生 PostgreSQL 与 Temporal Profile，不改变领域模型和 Harness 契约。
+
+多附件任务由 Intake Bundle 聚合器统一处理：按 SKU/稳定描述键合并重复行，重编号后保留每个原始附件的证据；字段冲突进入人工补充。工作台删除只设置任务归档字段并终止未运行 Job，不删除受审计约束的业务记录。
 
 ## 4. 静态与动态事实边界
 
@@ -60,3 +64,23 @@ RAG 不得包含：
 - `multi_llm`：四个专业审阅器真正调用 Model Gateway，但输出仅为 advisory；确定性工作流仍是唯一决策权威。
 
 所有模式复用相同状态机、工具、RAG、记忆、审批和 PO 幂等实现，才能进行公平 A/B。
+
+## 6. 多租户与企业系统边界
+
+```text
+tenant_engineering_machinery ─┐
+                              ├─> 同一 Workflow / Harness / Agent / Eval
+tenant_enterprise_it ─────────┘               |
+                                              v
+                                 Tenant-scoped Tool Gateway
+                                   |        |         |
+                                  ERP    Supplier  Logistics
+                                   |        |         |
+                          local SQLite / HTTP sandbox / HTTPS enterprise UAT
+```
+
+- `local` 是 CI 和默认网站 Profile，完全离线且可复现。
+- `http_sandbox` 连接本机 8101 端口的独立服务，验证真实 HTTP 边界。
+- `http_enterprise` 要求 HTTPS Endpoint 和服务密钥；缺少配置时创建 Runtime 失败，不静默降级。
+- 模型和用户不能提供 Base URL。非回环 HTTP 被拒绝，避免 SSRF 和明文传输。
+- HTTP 响应必须通过 Pydantic Schema 与租户一致性检查，再写入字段级证据。

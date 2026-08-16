@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -32,6 +34,110 @@ class IntakeResult(BaseModel):
     lines: tuple[ProcurementLine, ...]
     evidence: tuple[IntakeEvidence, ...]
     questions: tuple[str, ...] = ()
+
+
+def relabel_intake_artifact(result: IntakeResult, *, artifact_id: str) -> IntakeResult:
+    """Replace an object-store filename with the user-visible original filename."""
+    return result.model_copy(
+        update={
+            "artifact_id": artifact_id,
+            "evidence": tuple(
+                item.model_copy(update={"source_id": artifact_id})
+                for item in result.evidence
+            ),
+        }
+    )
+
+
+def merge_intake_results(
+    results: Sequence[IntakeResult],
+    *,
+    artifact_id: str,
+) -> IntakeResult:
+    """Merge an attachment bundle while retaining evidence and failing on conflicts."""
+    if not results:
+        raise ValueError("at least one intake result is required")
+    merged_lines: list[ProcurementLine] = []
+    merged_evidence: list[IntakeEvidence] = []
+    questions: list[str] = []
+    identity_to_line: dict[tuple[str, ...], ProcurementLine] = {}
+    identity_to_number: dict[tuple[str, ...], int] = {}
+
+    for result in results:
+        questions.extend(f"{result.artifact_id}: {question}" for question in result.questions)
+        line_number_map: dict[int, int] = {}
+        for line in result.lines:
+            identity = _procurement_line_identity(line)
+            existing = identity_to_line.get(identity)
+            if existing is None:
+                merged_number = len(merged_lines) + 1
+                merged = line.model_copy(update={"line_number": merged_number})
+                merged_lines.append(merged)
+                identity_to_line[identity] = merged
+                identity_to_number[identity] = merged_number
+            else:
+                merged_number = identity_to_number[identity]
+                conflicts = _line_conflicts(existing, line)
+                if conflicts:
+                    questions.append(
+                        f"{result.artifact_id}: 同一物料在附件间的 "
+                        f"{', '.join(conflicts)} 不一致，请人工确认。"
+                    )
+            line_number_map[line.line_number] = merged_number
+        for item in result.evidence:
+            merged_evidence.append(
+                item.model_copy(
+                    update={
+                        "line_number": (
+                            line_number_map.get(item.line_number)
+                            if item.line_number is not None
+                            else None
+                        )
+                    }
+                )
+            )
+
+    manifest = [
+        {"artifact_id": result.artifact_id, "sha256": result.source_sha256}
+        for result in results
+    ]
+    manifest_bytes = json.dumps(
+        manifest,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return IntakeResult(
+        artifact_id=artifact_id,
+        source_type="upload_bundle",
+        source_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+        lines=tuple(merged_lines),
+        evidence=tuple(merged_evidence),
+        questions=tuple(dict.fromkeys(questions)),
+    )
+
+
+def _procurement_line_identity(line: ProcurementLine) -> tuple[str, ...]:
+    if line.part_number:
+        return ("part_number", line.part_number.strip().casefold())
+    return (
+        "description",
+        re.sub(r"\s+", "", line.description).casefold(),
+        (line.equipment_model or "").strip().casefold(),
+    )
+
+
+def _line_conflicts(first: ProcurementLine, second: ProcurementLine) -> tuple[str, ...]:
+    conflicts: list[str] = []
+    if first.quantity != second.quantity:
+        conflicts.append("数量")
+    if first.unit.strip().casefold() != second.unit.strip().casefold():
+        conflicts.append("单位")
+    if (first.equipment_model or "").strip().casefold() != (
+        second.equipment_model or ""
+    ).strip().casefold():
+        conflicts.append("设备型号")
+    return tuple(conflicts)
 
 
 class VisionExtractor(Protocol):
@@ -124,7 +230,7 @@ class IntakeService:
     @staticmethod
     def _parse_text_line(text: str) -> dict[str, Any] | None:
         parts = [part.strip() for part in re.split(r"[|,，\t]", text)]
-        if len(parts) >= 4:
+        if len(parts) >= 4 and re.fullmatch(r"\d+(?:\.\d+)?", parts[2]):
             return {
                 "part_number": parts[0] or None,
                 "description": parts[1],

@@ -1,0 +1,14 @@
+{
+  "tenant_id": "tenant_enterprise_it",
+  "display_name": "企业 IT 设备采购演示租户",
+  "industry": "enterprise_it_equipment",
+  "default_currency": "CNY",
+  "timezone": "Asia/Shanghai",
+  "locale": "zh-CN",
+  "tenant_pack_version": "1.0.0",
+  "status": "active",
+  "demo_seed": {
+    "catalog": "seed/catalog.json",
+    "suppliers": "seed/suppliers.json"
+  }
+}

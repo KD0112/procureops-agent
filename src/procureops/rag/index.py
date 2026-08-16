@@ -12,7 +12,9 @@ from procureops.rag.governance import KnowledgeDocument
 from procureops.rag.retrieval import (
     KnowledgeChunk,
     RetrievalHit,
+    _bm25_scores,
     _chunks,
+    _rrf_rankings,
     _terms,
 )
 
@@ -58,8 +60,8 @@ class SQLiteKnowledgeIndex:
         *,
         path: Path,
         embedding_provider: EmbeddingProvider,
-        lexical_weight: float = 0.3,
-        vector_weight: float = 0.7,
+        lexical_weight: float = 0.5,
+        vector_weight: float = 0.5,
     ) -> None:
         if not math.isclose(lexical_weight + vector_weight, 1.0):
             raise ValueError("hybrid weights must sum to 1")
@@ -112,13 +114,16 @@ class SQLiteKnowledgeIndex:
             for chunk, text, vector in zip(chunks, texts, vectors, strict=True):
                 self._insert_chunk(connection, chunk, text, vector)
             metadata = {
-                "index_version": "1.0.0",
+                "index_version": "2.0.0",
                 "corpus_hash": _corpus_hash(documents),
                 "embedding_provider": self.embedding_provider.provider,
                 "embedding_model": self.embedding_provider.model,
                 "embedding_dimensions": str(self.embedding_provider.dimensions),
                 "document_count": str(len(documents)),
                 "chunk_count": str(len(chunks)),
+                "lexical_algorithm": "bm25",
+                "fusion_algorithm": "rrf",
+                "rrf_k": "60",
             }
             connection.execute("DELETE FROM index_metadata")
             connection.executemany(
@@ -161,11 +166,15 @@ class SQLiteKnowledgeIndex:
         )
 
     def is_current(self, documents: list[KnowledgeDocument]) -> bool:
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT value FROM index_metadata WHERE key='corpus_hash'"
-            ).fetchone()
-        return row is not None and row["value"] == _corpus_hash(documents)
+        metadata = self.metadata()
+        return (
+            metadata.get("corpus_hash") == _corpus_hash(documents)
+            and metadata.get("embedding_provider") == self.embedding_provider.provider
+            and metadata.get("embedding_model") == self.embedding_provider.model
+            and metadata.get("embedding_dimensions")
+            == str(self.embedding_provider.dimensions)
+            and metadata.get("fusion_algorithm") == "rrf"
+        )
 
     def metadata(self) -> dict[str, str]:
         with self._connect() as connection:
@@ -183,28 +192,40 @@ class SQLiteKnowledgeIndex:
     ) -> tuple[RetrievalHit, ...]:
         if not tenant_id or not actor_roles:
             return ()
-        query_terms = _terms(query)
         query_vector = self.embedding_provider.embed([query])[0]
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM knowledge_chunks WHERE tenant_id=?",
+                """
+                SELECT * FROM knowledge_chunks WHERE tenant_id=?
+                ORDER BY document_id, heading, chunk_id
+                """,
                 (tenant_id,),
             ).fetchall()
-        hits: list[RetrievalHit] = []
-        threshold = 0.0 if minimum_score is None else minimum_score
+        authorized_rows = []
         for row in rows:
             allowed_roles = frozenset(json.loads(row["allowed_roles_json"]))
-            if not actor_roles.intersection(allowed_roles):
-                continue
-            candidate_terms = set(row["search_terms"].split())
-            lexical = (
-                len(query_terms & candidate_terms) / len(query_terms) if query_terms else 0.0
-            )
-            vector = json.loads(row["embedding_json"])
-            dense = _cosine(query_vector, vector)
-            normalized_dense = max(0.0, dense)
-            score = self.lexical_weight * lexical + self.vector_weight * normalized_dense
-            if score < threshold:
+            if actor_roles.intersection(allowed_roles):
+                authorized_rows.append(row)
+        texts = [f"{row['heading']}\n{row['content']}" for row in authorized_rows]
+        bm25_scores = _bm25_scores(query, texts)
+        dense_scores = [
+            max(0.0, _cosine(query_vector, json.loads(row["embedding_json"])))
+            for row in authorized_rows
+        ]
+        bm25_ranks, vector_ranks, fused_scores = _rrf_rankings(
+            bm25_scores,
+            dense_scores,
+            lexical_weight=self.lexical_weight,
+            semantic_weight=self.vector_weight,
+        )
+        max_bm25 = max(bm25_scores, default=0.0)
+        hits: list[RetrievalHit] = []
+        threshold = 0.0 if minimum_score is None else minimum_score
+        for index, row in enumerate(authorized_rows):
+            lexical = bm25_scores[index] / max_bm25 if max_bm25 else 0.0
+            normalized_dense = dense_scores[index]
+            score = fused_scores.get(index, 0.0)
+            if score <= 0 or score < threshold:
                 continue
             hits.append(
                 RetrievalHit(
@@ -215,13 +236,24 @@ class SQLiteKnowledgeIndex:
                     score=round(min(1.0, score), 6),
                     lexical_score=round(lexical, 6),
                     semantic_score=round(normalized_dense, 6),
+                    bm25_rank=bm25_ranks.get(index),
+                    vector_rank=vector_ranks.get(index),
+                    rrf_score=round(score, 6),
                     citation=(
                         f"{row['document_id']}@{row['document_version']}#{row['heading']}"
                     ),
                     document_sha256=row["document_sha256"],
                 )
             )
-        hits.sort(key=lambda item: (-item.score, item.document_id, item.heading))
+        hits.sort(
+            key=lambda item: (
+                -item.score,
+                -item.lexical_score,
+                -item.semantic_score,
+                item.document_id,
+                item.heading,
+            )
+        )
         return tuple(hits[: (top_k or 6)])
 
 

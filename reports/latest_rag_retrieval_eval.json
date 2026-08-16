@@ -1,0 +1,73 @@
+{
+  "case_count": 6,
+  "dataset_version": "1.0.0",
+  "mrr": 1.0,
+  "precision_at_k": 0.388889,
+  "recall_at_k": 1.0,
+  "results": [
+    {
+      "case_id": "rag-001",
+      "precision_at_k": 0.3333333333333333,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "returned_document_ids": [
+        "EM-POL-APPROVAL-001",
+        "EM-POL-SUPPLIER-001",
+        "EM-GUIDE-COMPAT-001"
+      ]
+    },
+    {
+      "case_id": "rag-002",
+      "precision_at_k": 0.3333333333333333,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "returned_document_ids": [
+        "EM-GUIDE-CATALOG-001",
+        "EM-GUIDE-CATALOG-001",
+        "EM-POL-PROCUREMENT-001"
+      ]
+    },
+    {
+      "case_id": "rag-003",
+      "precision_at_k": 0.3333333333333333,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "returned_document_ids": [
+        "EM-POL-SUPPLIER-001",
+        "EM-GUIDE-CATALOG-001",
+        "EM-POL-EVIDENCE-001"
+      ]
+    },
+    {
+      "case_id": "rag-004",
+      "precision_at_k": 0.3333333333333333,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "returned_document_ids": [
+        "EM-POL-QUOTE-001",
+        "EM-GUIDE-COMPAT-001",
+        "EM-POL-PROCUREMENT-001"
+      ]
+    },
+    {
+      "case_id": "rag-005",
+      "precision_at_k": 0.5,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "returned_document_ids": [
+        "IT-GUIDE-CATALOG-001",
+        "IT-GUIDE-CATALOG-001"
+      ]
+    },
+    {
+      "case_id": "rag-006",
+      "precision_at_k": 0.5,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "returned_document_ids": [
+        "IT-GUIDE-CATALOG-001",
+        "IT-GUIDE-CATALOG-001"
+      ]
+    }
+  ]
+}

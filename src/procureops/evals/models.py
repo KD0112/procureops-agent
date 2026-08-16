@@ -9,6 +9,7 @@ class EvalCase(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     case_id: str
+    tenant_id: str = "tenant_engineering_machinery"
     category: str
     input_text: str
     expected_outcome: str
@@ -16,6 +17,13 @@ class EvalCase(BaseModel):
     attack_kind: str | None = None
     expected_roles: frozenset[str] = frozenset()
     tags: frozenset[str] = frozenset()
+    dataset_version: str = "1.0.0"
+    split: str = "development"
+    expected_tools: frozenset[str] = frozenset()
+    forbidden_tools: frozenset[str] = frozenset()
+    reference_answer: str | None = None
+    retrieval_context: tuple[str, ...] = ()
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class EvalResult(BaseModel):

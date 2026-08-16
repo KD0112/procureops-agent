@@ -1,0 +1,33 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: procureops
+      MYSQL_USER: procureops
+      MYSQL_PASSWORD: procureops-local
+      MYSQL_ROOT_PASSWORD: root-local
+    ports:
+      - "3307:3306"
+    volumes:
+      - procureops_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uprocureops", "-pprocureops-local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - procureops_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  procureops_mysql:
+  procureops_redis:

@@ -13,3 +13,7 @@ var/*
 *.db
 *.log
 work/
+.deepeval/
+reports/raw/
+*.tmp
+*.bak

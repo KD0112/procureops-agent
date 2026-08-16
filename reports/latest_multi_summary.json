@@ -41,8 +41,8 @@
     "AuthorizationDenied": 7,
     "PermanentToolError": 7
   },
-  "latency_p50_ms": 227.207,
-  "latency_p95_ms": 250.611,
+  "latency_p50_ms": 254.209,
+  "latency_p95_ms": 309.608,
   "outcome_taxonomy": {
     "blocked": 7,
     "completed": 66,

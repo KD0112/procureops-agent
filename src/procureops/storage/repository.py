@@ -32,6 +32,14 @@ class ProcureOpsRepository:
     def __init__(self, database: SQLiteDatabase) -> None:
         self.database = database
 
+    def tenant_exists(self, tenant_id: str) -> bool:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT 1 FROM tenants WHERE tenant_id=?",
+                (tenant_id,),
+            ).fetchone()
+        return row is not None
+
     def seed_tenant(
         self,
         *,
@@ -216,15 +224,16 @@ class ProcureOpsRepository:
         task_id: str,
         job_payload: dict[str, Any],
         idempotency_key: str,
-        upload: dict[str, Any] | None = None,
-    ) -> tuple[TaskSnapshot, str, str | None]:
-        """Atomically persist the task, optional upload metadata, and queue intent."""
+        job_type: str = "process_intake",
+        uploads: tuple[dict[str, Any], ...] = (),
+    ) -> tuple[TaskSnapshot, str, tuple[str, ...]]:
+        """Atomically persist the task, upload metadata, and queue intent."""
 
         now = utc_now().isoformat()
         outbox_event_id = str(uuid4())
-        upload_id = str(uuid4()) if upload is not None else None
+        upload_ids = tuple(str(uuid4()) for _ in uploads)
         outbox_payload = {
-            "job_type": "process_intake",
+            "job_type": job_type,
             "job_payload": job_payload,
             "max_attempts": 3,
         }
@@ -247,13 +256,17 @@ class ProcureOpsRepository:
                     now,
                 ),
             )
-            if upload is not None and upload_id is not None:
+            for ordinal, (upload_id, upload) in enumerate(
+                zip(upload_ids, uploads, strict=True),
+                start=1,
+            ):
                 connection.execute(
                     """
                     INSERT INTO task_uploads(
                         upload_id, tenant_id, task_id, original_filename,
-                        storage_key, content_type, size_bytes, sha256, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        storage_key, content_type, size_bytes, sha256, created_at,
+                        ordinal
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         upload_id,
@@ -265,6 +278,7 @@ class ProcureOpsRepository:
                         upload["size_bytes"],
                         upload["sha256"],
                         now,
+                        ordinal,
                     ),
                 )
             connection.execute(
@@ -289,13 +303,14 @@ class ProcureOpsRepository:
         return (
             self.get_task(tenant_id=tenant_id, task_id=task_id),
             outbox_event_id,
-            upload_id,
+            upload_ids,
         )
 
     def task_created_by(self, *, tenant_id: str, task_id: str) -> str:
         with self.database.connect() as connection:
             row = connection.execute(
-                "SELECT created_by FROM procurement_tasks WHERE tenant_id=? AND task_id=?",
+                "SELECT created_by FROM procurement_tasks "
+                "WHERE tenant_id=? AND task_id=? AND deleted_at IS NULL",
                 (tenant_id, task_id),
             ).fetchone()
         if row is None:
@@ -314,7 +329,8 @@ class ProcureOpsRepository:
                 SELECT task_id, tenant_id, created_by, status, request_json,
                        workflow_version, version, created_at, updated_at
                 FROM procurement_tasks
-                WHERE tenant_id=? ORDER BY updated_at DESC LIMIT ?
+                WHERE tenant_id=? AND deleted_at IS NULL
+                ORDER BY updated_at DESC LIMIT ?
                 """,
                 (tenant_id, limit),
             ).fetchall()
@@ -366,7 +382,7 @@ class ProcureOpsRepository:
             rows = connection.execute(
                 """
                 SELECT * FROM task_uploads
-                WHERE tenant_id=? AND task_id=? ORDER BY created_at
+                WHERE tenant_id=? AND task_id=? ORDER BY ordinal, created_at
                 """,
                 (tenant_id, task_id),
             ).fetchall()
@@ -377,7 +393,8 @@ class ProcureOpsRepository:
             row = connection.execute(
                 """
                 SELECT tenant_id, task_id, status, version, request_json
-                FROM procurement_tasks WHERE tenant_id=? AND task_id=?
+                FROM procurement_tasks
+                WHERE tenant_id=? AND task_id=? AND deleted_at IS NULL
                 """,
                 (tenant_id, task_id),
             ).fetchone()
@@ -390,6 +407,65 @@ class ProcureOpsRepository:
             version=row["version"],
             request=json.loads(row["request_json"]),
         )
+
+    def archive_task(
+        self,
+        *,
+        tenant_id: str,
+        task_id: str,
+        deleted_by: str,
+        reason: str = "user_requested",
+    ) -> None:
+        now = utc_now().isoformat()
+        event_payload = {
+            "deleted_by": deleted_by,
+            "reason": reason,
+            "retention": "soft_archive_audit_retained",
+        }
+        with self.database.transaction() as connection:
+            leased = connection.execute(
+                "SELECT 1 FROM work_queue WHERE tenant_id=? AND task_id=? "
+                "AND status='leased' LIMIT 1",
+                (tenant_id, task_id),
+            ).fetchone()
+            if leased is not None:
+                raise RuntimeError("task has an actively leased worker job")
+            cursor = connection.execute(
+                """
+                UPDATE procurement_tasks
+                SET deleted_at=?, deleted_by=?, deletion_reason=?,
+                    version=version+1, updated_at=?
+                WHERE tenant_id=? AND task_id=? AND deleted_at IS NULL
+                """,
+                (now, deleted_by, reason, now, tenant_id, task_id),
+            )
+            if cursor.rowcount != 1:
+                raise KeyError("task not found in tenant scope")
+            connection.execute(
+                """
+                UPDATE work_queue
+                SET status='dead_letter', last_error_class='TaskArchived',
+                    last_error_message='task archived before processing', updated_at=?
+                WHERE tenant_id=? AND task_id=? AND status IN ('pending', 'retry')
+                """,
+                (now, tenant_id, task_id),
+            )
+            connection.execute(
+                """
+                INSERT INTO workflow_events(
+                    event_id, tenant_id, task_id, event_type,
+                    payload_hash, payload_json, occurred_at
+                ) VALUES (?, ?, ?, 'task.archived', ?, ?, ?)
+                """,
+                (
+                    str(uuid4()),
+                    tenant_id,
+                    task_id,
+                    canonical_hash(event_payload),
+                    _json(event_payload),
+                    now,
+                ),
+            )
 
     def transition_task(
         self,
@@ -860,5 +936,28 @@ class ProcureOpsRepository:
                 WHERE tenant_id=? AND task_id=? ORDER BY sequence
                 """,
                 (tenant_id, task_id),
+            ).fetchall()
+        return tuple(dict(row) for row in rows)
+
+    def workflow_events_after(
+        self,
+        *,
+        tenant_id: str,
+        task_id: str,
+        after_sequence: int,
+        limit: int = 100,
+    ) -> tuple[dict[str, Any], ...]:
+        if after_sequence < 0:
+            raise ValueError("after_sequence must be non-negative")
+        if not 1 <= limit <= 500:
+            raise ValueError("workflow event limit must be between 1 and 500")
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM workflow_events
+                WHERE tenant_id=? AND task_id=? AND sequence>?
+                ORDER BY sequence LIMIT ?
+                """,
+                (tenant_id, task_id, after_sequence, limit),
             ).fetchall()
         return tuple(dict(row) for row in rows)

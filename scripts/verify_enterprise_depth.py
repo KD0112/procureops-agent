@@ -39,6 +39,11 @@ def main() -> None:
             "('pending','dispatching') ORDER BY created_at, event_id LIMIT ?",
             (100,),
         ),
+        "active_task_list": database.explain_query_plan(
+            "SELECT task_id FROM procurement_tasks WHERE tenant_id=? "
+            "AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT ?",
+            ("tenant", 100),
+        ),
     }
     connection = database.connect()
     try:
@@ -58,6 +63,7 @@ def main() -> None:
         "active_memory": "idx_memory_active",
         "auth_session": "auth_sessions",
         "outbox_dispatch": "idx_outbox_dispatch",
+        "active_task_list": "idx_tasks_active",
     }
     index_checks = {
         name: signal in " ".join(details)
@@ -77,7 +83,7 @@ def main() -> None:
             integrity_check == "ok"
             and foreign_key_violations == 0
             and all(index_checks.values())
-            and migrations[-1:] == ["007_passwordless_local_identity"]
+            and migrations[-1:] == ["008_task_bundle_and_archival"]
         ),
     }
     output = PROJECT_ROOT / "reports" / "latest_sqlite_verification.json"

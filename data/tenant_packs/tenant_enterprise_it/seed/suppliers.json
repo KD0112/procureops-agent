@@ -1,0 +1,5 @@
+[
+  {"supplier_id":"it-supplier-north","name":"北区企业 IT 渠道商（合成）","approved":true,"risk_level":"low","price_multiplier":"1.00","freight":"60.00","inventory_base":80,"shipping_method":"insured_ground","lead_time_days":2,"shipping_cost":"60.00"},
+  {"supplier_id":"it-supplier-cloud","name":"全国 IT 集成服务商（合成）","approved":true,"risk_level":"medium","price_multiplier":"0.98","freight":"120.00","inventory_base":50,"shipping_method":"priority_air","lead_time_days":1,"shipping_cost":"120.00"},
+  {"supplier_id":"it-supplier-unapproved","name":"未准入电子市场商家（合成）","approved":false,"risk_level":"high","price_multiplier":"0.82","freight":"30.00","inventory_base":200,"shipping_method":"economy_ground","lead_time_days":5,"shipping_cost":"30.00"}
+]

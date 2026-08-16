@@ -1,5 +1,7 @@
 # Demo Guide
 
+第一次演示前建议先阅读 `docs/core-concepts-and-demo.md`。它解释了页面上能看到什么、哪些能力只能通过测试展示，以及四个参考项目与 Project2 的逐项对应关系。
+
 ## 1. 初始化与验证
 
 ```powershell
@@ -9,7 +11,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 ```
 
 验收输出应包含知识文档校验、Ruff 通过、测试通过和覆盖率不低于 90%。普通验证不调用真实 API。
-脚本还会执行 SQLite `integrity_check`、外键检查、七个迁移版本校验以及物流、记忆、会话、Outbox 四条查询的 `EXPLAIN QUERY PLAN`。
+脚本还会执行 SQLite `integrity_check`、外键检查、八个迁移版本校验以及物流、记忆、会话、Outbox、活动任务五条查询的 `EXPLAIN QUERY PLAN`。
 
 ## 2. 两分钟 Happy Path
 
@@ -34,7 +36,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 
 ```powershell
 & ".\.venv\Scripts\python.exe" scripts\run_api.py
-# 浏览器访问 http://127.0.0.1:8000
+# 浏览器访问 http://127.0.0.1:8030
 ```
 
 演示顺序：
@@ -45,6 +47,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 4. 打开“进化治理”，提交纠错反馈，从反馈创建候选，运行 20 条 Gold Set 基线/候选回归；切换合规账号审批、发布并演示回滚。
 5. 再以“确定性多 Agent”创建任务，在时间线查看 `supervisor.trace`。
 6. 只有模型配置完整时才选择“模型多 Agent”；Supplier Research Agent 最多 3 步且只能访问只读物流工具。
+
+当前默认演示采用 `single`，真实模型开关关闭。页面即使显示已配置的 DeepSeek 文本模型或 GLM 视觉模型，也不代表当前任务调用了它们；只有设置 `PROCUREOPS_ENABLE_LIVE_MODELS=1` 并选择需要模型的路径才会产生真实调用。
 
 ## 5. 真实模型接入
 

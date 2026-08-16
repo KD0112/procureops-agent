@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ProcureOps · 采购任务工作台</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=0.5.0">
 </head>
 <body>
   <div class="shell">
@@ -22,13 +22,13 @@
       <div id="task-list" class="task-list"><div class="empty">正在加载任务…</div></div>
       <div class="system-card">
         <span class="pulse"></span><strong>Harness 正常</strong>
-        <small>SQLite · 本机模式 · 可回放</small>
+        <small id="integration-status">SQLite · 本机模式 · 可回放</small>
       </div>
     </aside>
 
     <main>
       <header class="topbar">
-        <div><span class="eyebrow">TENANT</span><strong>工程机械配件采购</strong></div>
+        <div><span class="eyebrow">TENANT</span><strong id="current-tenant-name">正在加载租户…</strong></div>
         <div class="top-actions">
           <span id="model-status" class="role">模型配置检测中…</span>
           <span id="identity-status" class="role">正在进入本机身份…</span>
@@ -52,7 +52,7 @@
       <section id="detail-view" class="detail hidden">
         <div class="detail-head">
           <div><span class="eyebrow">PROCUREMENT TASK</span><h1 id="detail-title">采购任务</h1><code id="detail-id"></code><span id="detail-architecture" class="architecture"></span></div>
-          <span id="detail-status" class="status"></span>
+          <div class="detail-actions"><button id="delete-task-button" class="secondary compact danger">删除任务</button><span id="detail-status" class="status"></span></div>
         </div>
         <div class="metrics">
           <article><span>采购明细</span><strong id="metric-lines">0</strong><small>条结构化行</small></article>
@@ -97,9 +97,9 @@
         </select>
       </label>
       <div class="or"><span>或上传业务文件</span></div>
-      <label class="drop"><input id="task-file" type="file" accept=".txt,.md,.csv,.pdf,.xlsx,.xlsm,.png,.jpg,.jpeg,.webp"><strong>PDF / Excel / 图片 / 文本</strong><span>最大 10 MiB，原文件按租户隔离保存并计算 SHA-256</span></label>
+      <label class="drop"><input id="task-file" type="file" multiple accept=".txt,.md,.csv,.pdf,.xlsx,.xlsm,.png,.jpg,.jpeg,.webp"><strong>PDF / Excel / 图片 / 文本（可多选）</strong><span>最多 5 个；单文件 10 MiB、合计 25 MiB；原文件按租户隔离并计算 SHA-256</span></label>
       <p id="form-error" class="error"></p>
-      <div class="dialog-actions"><button value="cancel" class="secondary">取消</button><button id="submit-task" value="default" class="primary">创建并进入队列</button></div>
+      <div class="dialog-actions"><button type="button" value="cancel" class="secondary dialog-close">取消</button><button type="submit" id="submit-task" value="default" class="primary">创建并进入队列</button></div>
     </form>
   </dialog>
 
@@ -136,6 +136,12 @@
     <form id="identity-form">
       <div class="dialog-head"><div><span class="eyebrow">LOCAL IDENTITY</span><h2>切换本机身份</h2></div><button type="button" class="icon dialog-close">×</button></div>
       <p class="dialog-copy">本机演示不需要密码。角色仍由服务端租户成员表决定；采购任务的申请人与审批人必须是不同身份。</p>
+      <label>选择租户
+        <select id="identity-tenant-id">
+          <option value="tenant_engineering_machinery">工程机械配件采购演示租户</option>
+          <option value="tenant_enterprise_it">企业 IT 设备采购演示租户</option>
+        </select>
+      </label>
       <label>选择身份
         <select id="identity-user-id">
           <option value="local-buyer">采购申请人</option>
@@ -148,6 +154,6 @@
     </form>
   </dialog>
   <div id="toast" class="toast"></div>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=0.5.0"></script>
 </body>
 </html>

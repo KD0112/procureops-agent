@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
 
-from procureops.evals.live_model import MODEL_GOLD_CASES
+from procureops.evals.live_model import MODEL_REGRESSION_CASES
 from procureops.evolution.regression import evaluate_prompt_with_fake_model
 from procureops.intake.prompts import DEFAULT_TEXT_EXTRACTION_PROMPT, PROMPT_SCOPE_TEXT_INTAKE
 from procureops.storage import SQLiteDatabase
@@ -353,8 +353,8 @@ class EvolutionService:
             "suite": "prompt_gold_regression_v1",
             "evaluated_by": evaluated_by,
             "dataset": {
-                "version": "model_gold_v1",
-                "case_count": len(MODEL_GOLD_CASES),
+                "version": "model_gold_v2_regression",
+                "case_count": len(MODEL_REGRESSION_CASES),
                 "dataset_hash": _hash_json(
                     [
                         {
@@ -364,7 +364,7 @@ class EvolutionService:
                             "expected_quantity": str(case.expected_quantity),
                             "tags": case.tags,
                         }
-                        for case in MODEL_GOLD_CASES
+                        for case in MODEL_REGRESSION_CASES
                     ]
                 ),
             },

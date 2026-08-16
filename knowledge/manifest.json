@@ -128,6 +128,37 @@
       ],
       "path": "knowledge/tenant_engineering_machinery/product_guides/synthetic_compatibility_reference.md",
       "sha256": "c5e6113802f10c894407ca8f0cd701f5771e64155733bcdc9b714350240f7bab"
+    },
+    {
+      "document_id": "IT-POL-PROCUREMENT-001",
+      "tenant_id": "tenant_enterprise_it",
+      "version": "1.0.0",
+      "classification": "internal",
+      "allowed_roles": [
+        "requester",
+        "procurement_operator",
+        "procurement_specialist",
+        "department_approver",
+        "compliance_approver",
+        "auditor"
+      ],
+      "path": "knowledge/tenant_enterprise_it/policies/it_procurement_policy.md",
+      "sha256": "ccf3d200de5bb116627e8af167d74890721bab9d68d30234f86f78070eb32bf3"
+    },
+    {
+      "document_id": "IT-GUIDE-CATALOG-001",
+      "tenant_id": "tenant_enterprise_it",
+      "version": "1.0.0",
+      "classification": "internal",
+      "allowed_roles": [
+        "requester",
+        "procurement_operator",
+        "procurement_specialist",
+        "catalog_manager",
+        "auditor"
+      ],
+      "path": "knowledge/tenant_enterprise_it/product_guides/it_catalog_matching_guide.md",
+      "sha256": "9aaf2fcbf69937520f7b635f57109c323fc14a7d58ecc8578579ff3352ce83c5"
     }
   ]
 }

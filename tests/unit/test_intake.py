@@ -22,6 +22,15 @@ def test_text_intake_extracts_structured_line_and_evidence() -> None:
     }
 
 
+def test_natural_language_with_commas_is_not_misread_as_csv() -> None:
+    result = IntakeService().from_text(
+        "Please buy 1 hydraulic pump, part number HM-HYD-001, compatible with EX200-A."
+    )
+
+    assert not result.lines
+    assert result.questions
+
+
 def test_excel_intake_supports_chinese_headers(tmp_path: Path) -> None:
     path = tmp_path / "request.xlsx"
     workbook = Workbook()

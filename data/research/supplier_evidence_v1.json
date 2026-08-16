@@ -1,0 +1,50 @@
+[
+  {
+    "tenant_id": "tenant_engineering_machinery",
+    "supplier_id": "supplier-alpha",
+    "product_id": null,
+    "source_id": "demo-quality-registry-alpha",
+    "source_type": "authoritative_registry",
+    "locator": "registry://quality/supplier-alpha",
+    "observed_at": "2026-08-01T00:00:00Z",
+    "content_hash": "4f59db4ea6349dfadcb752a92c24ff520cd61908999eeb8ce56f645d031ea7ed",
+    "claim_key": "quality_certification",
+    "claim_value": "valid",
+    "claim": "The synthetic quality certification record is valid for the demo period.",
+    "relevance": 0.95,
+    "confidence": 0.95,
+    "trust_tier": "authoritative"
+  },
+  {
+    "tenant_id": "tenant_engineering_machinery",
+    "supplier_id": "supplier-beta",
+    "product_id": null,
+    "source_id": "demo-quality-registry-beta",
+    "source_type": "authoritative_registry",
+    "locator": "registry://quality/supplier-beta",
+    "observed_at": "2026-08-01T00:00:00Z",
+    "content_hash": "c8a78bfa90faf521e5732f9c6a924e85a202d86c15c78297a458e231b746f53d",
+    "claim_key": "quality_certification",
+    "claim_value": "valid",
+    "claim": "The synthetic quality certification record is valid for the demo period.",
+    "relevance": 0.95,
+    "confidence": 0.95,
+    "trust_tier": "authoritative"
+  },
+  {
+    "tenant_id": "tenant_enterprise_it",
+    "supplier_id": "it-supplier-north",
+    "product_id": null,
+    "source_id": "demo-service-registry-it-north",
+    "source_type": "partner_registry",
+    "locator": "registry://service/it-supplier-north",
+    "observed_at": "2026-08-01T00:00:00Z",
+    "content_hash": "23107de729c5f99bb7d1d4c3f84ce83fcffa7969882e640cf922b59dc8234877",
+    "claim_key": "onsite_service_capability",
+    "claim_value": "documented",
+    "claim": "The demo partner registry contains an onsite service capability document.",
+    "relevance": 0.9,
+    "confidence": 0.8,
+    "trust_tier": "partner"
+  }
+]

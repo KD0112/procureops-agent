@@ -29,6 +29,9 @@ def test_persistent_rag_index_rebuild_search_acl_and_staleness(tmp_path: Path) -
     )
     assert hits
     assert hits[0].citation
+    assert hits[0].rrf_score == hits[0].score
+    assert hits[0].bm25_rank is not None or hits[0].vector_rank is not None
+    assert metadata["fusion_algorithm"] == "rrf"
     assert index.search(
         tenant_id="tenant-other",
         actor_roles=frozenset({"procurement_operator"}),
@@ -50,3 +53,25 @@ def test_hashing_embedding_is_deterministic_and_normalized() -> None:
 
     assert first == second
     assert round(sum(value * value for value in first), 6) == 1
+
+
+def test_bm25_prefers_rare_exact_term_and_rrf_exposes_both_rankings(tmp_path: Path) -> None:
+    documents = scan_knowledge_base(PROJECT_ROOT / "knowledge")
+    index = SQLiteKnowledgeIndex(
+        path=tmp_path / "rag.sqlite3",
+        embedding_provider=HashingEmbeddingProvider(dimensions=64),
+    )
+    index.rebuild(documents)
+
+    hits = index.search(
+        tenant_id="tenant_enterprise_it",
+        actor_roles=frozenset({"procurement_operator"}),
+        query="IT-LAP-DEV-14",
+        top_k=3,
+        minimum_score=0,
+    )
+
+    assert hits[0].document_id == "IT-GUIDE-CATALOG-001"
+    assert hits[0].bm25_rank == 1
+    assert 0 < hits[0].lexical_score <= 1
+    assert 0 < hits[0].rrf_score <= 1

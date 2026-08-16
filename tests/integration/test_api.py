@@ -53,11 +53,19 @@ def test_api_happy_path_pauses_for_approval_and_resumes_idempotently(
         pending = client.get(f"/api/tasks/{task_id}", headers=HEADERS).json()
         assert pending["task"]["status"] == "awaiting_approval"
         assert pending["pending_approval"]["approval_requirement"]["required_roles"]
+        assert pending["permissions"]["can_approve"] is False
+        assert pending["permissions"]["approval_block_reason"] == "maker_checker"
         assert {item["field_name"] for item in pending["evidence"]} >= {
             "part_number",
             "matched_product_id",
             "unit_price",
         }
+
+        checker_view = client.get(
+            f"/api/tasks/{task_id}", headers=APPROVER_HEADERS
+        ).json()
+        assert checker_view["permissions"]["can_approve"] is True
+        assert checker_view["permissions"]["approval_block_reason"] is None
 
         approved = client.post(
             f"/api/tasks/{task_id}/approval",
@@ -97,6 +105,207 @@ def test_api_upload_and_tenant_isolation(tmp_path: Path) -> None:
         assert detail["uploads"][0]["original_filename"] == "request.txt"
         other_tenant = {**HEADERS, "X-Tenant-ID": "tenant-other"}
         assert client.get(f"/api/tasks/{task_id}", headers=other_tenant).status_code == 404
+
+
+def test_task_event_stream_is_tenant_scoped_resumable_and_redacted(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        created = client.post(
+            "/api/tasks/text",
+            headers=HEADERS,
+            json={"text": "DEMO-HYD-PUMP-001,hydraulic pump,1,item,EX200-A"},
+        )
+        task_id = created.json()["task_id"]
+        assert _run_worker(client)["outcome"]["task_status"] == "awaiting_approval"
+        rejected = client.post(
+            f"/api/tasks/{task_id}/approval",
+            headers=APPROVER_HEADERS,
+            json={"decision": "reject", "reason": "stream test"},
+        )
+        assert rejected.status_code == 202
+
+        repository = client.app.state.runtime.repository
+        repository.append_workflow_event(
+            tenant_id=HEADERS["X-Tenant-ID"],
+            task_id=task_id,
+            event_type="test.sensitive",
+            payload={
+                "stage": "verification",
+                "instruction": "hidden prompt text",
+                "nested": {"api_key": "hidden secret"},
+            },
+        )
+        last_sequence = repository.workflow_events(
+            tenant_id=HEADERS["X-Tenant-ID"], task_id=task_id
+        )[-1]["sequence"]
+
+        with client.stream(
+            "GET",
+            f"/api/tasks/{task_id}/events/stream",
+            headers={**HEADERS, "Last-Event-ID": str(last_sequence - 1)},
+        ) as response:
+            body = "".join(response.iter_text())
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        assert f"id: {last_sequence}" in body
+        assert "event: test.sensitive" in body
+        assert '"stage":"verification"' in body
+        assert "hidden prompt text" not in body
+        assert "hidden secret" not in body
+
+        other_tenant = {**HEADERS, "X-Tenant-ID": "tenant-other"}
+        assert (
+            client.get(
+                f"/api/tasks/{task_id}/events/stream", headers=other_tenant
+            ).status_code
+            == 404
+        )
+
+
+def test_api_multi_upload_merges_duplicate_pdf_and_excel_evidence(tmp_path: Path) -> None:
+    pdf = PROJECT_ROOT / "demo_assets" / "requests" / "procurement_request.pdf"
+    workbook = PROJECT_ROOT / "demo_assets" / "requests" / "procurement_request.xlsx"
+    with _client(tmp_path) as client:
+        created = client.post(
+            "/api/tasks/upload",
+            headers=HEADERS,
+            files=[
+                ("file", (pdf.name, pdf.read_bytes(), "application/pdf")),
+                (
+                    "file",
+                    (
+                        workbook.name,
+                        workbook.read_bytes(),
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    ),
+                ),
+            ],
+        )
+
+        assert created.status_code == 202
+        payload = created.json()
+        assert len(payload["upload_ids"]) == 2
+        assert _run_worker(client)["outcome"]["task_status"] == "awaiting_approval"
+        detail = client.get(f"/api/tasks/{payload['task_id']}", headers=HEADERS).json()
+        assert [item["requested_part_number"] for item in detail["items"]] == [
+            "DEMO-HYD-PUMP-001",
+            "DEMO-FLT-KIT-001",
+        ]
+        assert [item["original_filename"] for item in detail["uploads"]] == [
+            pdf.name,
+            workbook.name,
+        ]
+        evidence_sources = {item["source_id"] for item in detail["evidence"]}
+        assert {pdf.name, workbook.name} <= evidence_sources
+
+
+def test_api_multi_upload_conflict_fails_closed_before_supplier_tools(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        created = client.post(
+            "/api/tasks/upload",
+            headers=HEADERS,
+            files=[
+                (
+                    "file",
+                    (
+                        "request-a.txt",
+                        b"DEMO-HYD-PUMP-001,hydraulic pump,1,item,EX200-A",
+                        "text/plain",
+                    ),
+                ),
+                (
+                    "file",
+                    (
+                        "request-b.txt",
+                        b"DEMO-HYD-PUMP-001,hydraulic pump,2,item,EX200-A",
+                        "text/plain",
+                    ),
+                ),
+            ],
+        )
+
+        task_id = created.json()["task_id"]
+        assert _run_worker(client)["outcome"]["task_status"] == "needs_input"
+        detail = client.get(f"/api/tasks/{task_id}", headers=HEADERS).json()
+        assert detail["po_draft"] is None
+        assert all(item["selected_supplier_id"] is None for item in detail["items"])
+        assert not any(
+            event["event_type"] == "supplier.selection_decided"
+            for event in detail["events"]
+        )
+
+
+def test_api_multi_upload_enforces_file_count_limit(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        response = client.post(
+            "/api/tasks/upload",
+            headers=HEADERS,
+            files=[
+                ("file", (f"request-{index}.txt", b"x", "text/plain"))
+                for index in range(6)
+            ],
+        )
+
+    assert response.status_code == 413
+    assert "at most 5 files" in response.json()["detail"]
+
+
+def test_task_delete_is_tenant_scoped_soft_archive_with_audit(tmp_path: Path) -> None:
+    owner_headers = {
+        **HEADERS,
+        "X-Actor-ID": "task-owner",
+        "X-Actor-Roles": "procurement_operator",
+    }
+    other_headers = {
+        **HEADERS,
+        "X-Actor-ID": "other-operator",
+        "X-Actor-Roles": "procurement_operator",
+    }
+    with _client(tmp_path) as client:
+        created = client.post(
+            "/api/tasks/text",
+            headers=owner_headers,
+            json={"text": "DEMO-HYD-PUMP-001,hydraulic pump,1,item,EX200-A"},
+        )
+        task_id = created.json()["task_id"]
+
+        assert client.delete(f"/api/tasks/{task_id}", headers=other_headers).status_code == 403
+        assert client.delete(f"/api/tasks/{task_id}", headers=owner_headers).status_code == 204
+        assert client.get(f"/api/tasks/{task_id}", headers=owner_headers).status_code == 404
+        assert client.get("/api/tasks", headers=owner_headers).json()["items"] == []
+
+        runtime = client.app.state.runtime
+        with runtime.database.connect() as connection:
+            archived = connection.execute(
+                "SELECT deleted_at, deleted_by FROM procurement_tasks "
+                "WHERE tenant_id=? AND task_id=?",
+                (HEADERS["X-Tenant-ID"], task_id),
+            ).fetchone()
+            job = connection.execute(
+                "SELECT status, last_error_class FROM work_queue "
+                "WHERE tenant_id=? AND task_id=?",
+                (HEADERS["X-Tenant-ID"], task_id),
+            ).fetchone()
+            event = connection.execute(
+                "SELECT event_type FROM workflow_events "
+                "WHERE tenant_id=? AND task_id=? ORDER BY sequence DESC LIMIT 1",
+                (HEADERS["X-Tenant-ID"], task_id),
+            ).fetchone()
+        assert archived["deleted_at"]
+        assert archived["deleted_by"] == "task-owner"
+        assert job["status"] == "dead_letter"
+        assert job["last_error_class"] == "TaskArchived"
+        assert event["event_type"] == "task.archived"
+
+
+def test_health_exposes_frontend_compatibility_contract(tmp_path: Path) -> None:
+    with _client(tmp_path) as client:
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["api_version"] == "0.5.0"
+    assert payload["identity_api"] == "local-session-v1"
 
 
 def test_api_accepts_corrected_request_after_needs_input(tmp_path: Path) -> None:
@@ -298,3 +507,45 @@ def test_api_model_multi_agent_requires_explicit_live_model_opt_in(
 
         assert response.status_code == 409
         assert "PROCUREOPS_ENABLE_LIVE_MODELS=1" in response.json()["detail"]
+
+
+def test_api_lists_and_runs_second_tenant_with_server_side_membership(
+    tmp_path: Path,
+) -> None:
+    with _client(tmp_path) as client:
+        tenants = client.get("/api/tenants")
+        assert tenants.status_code == 200
+        assert {item["tenant_id"] for item in tenants.json()["items"]} == {
+            "tenant_engineering_machinery",
+            "tenant_enterprise_it",
+        }
+        buyer_session = client.post(
+            "/api/auth/local-session",
+            json={"user_id": "local-buyer", "tenant_id": "tenant_enterprise_it"},
+        ).json()
+        buyer_headers = {"Authorization": f"Bearer {buyer_session['token']}"}
+        created = client.post(
+            "/api/tasks/text",
+            headers=buyer_headers,
+            json={"text": "IT-LAP-DEV-14 | 研发笔记本 | 2 | 台"},
+        )
+        assert created.status_code == 202
+        task_id = created.json()["task_id"]
+        processed = client.post("/api/admin/worker/run-once", headers=buyer_headers)
+        assert processed.json()["outcome"]["task_status"] == "awaiting_approval"
+
+        approver_session = client.post(
+            "/api/auth/local-session",
+            json={"user_id": "local-approver", "tenant_id": "tenant_enterprise_it"},
+        ).json()
+        approver_headers = {"Authorization": f"Bearer {approver_session['token']}"}
+        approved = client.post(
+            f"/api/tasks/{task_id}/approval",
+            headers=approver_headers,
+            json={"decision": "approve"},
+        )
+        assert approved.status_code == 202
+        completed = client.post("/api/admin/worker/run-once", headers=approver_headers)
+        assert completed.json()["outcome"]["task_status"] == "completed"
+        detail = client.get(f"/api/tasks/{task_id}", headers=buyer_headers).json()
+        assert detail["po_draft"]["tenant_id"] == "tenant_enterprise_it"

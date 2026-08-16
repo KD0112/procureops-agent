@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from procureops.domain.models import RunBudget, RunContext
-from procureops.evals.live_model import MODEL_GOLD_CASES, LiveEvalCase
+from procureops.evals.live_model import MODEL_REGRESSION_CASES, LiveEvalCase
 from procureops.harness.audit import InMemoryAuditSink
 from procureops.harness.budget import RunBudgetLedger
 from procureops.harness.model_gateway import ModelGateway, ModelRequest, ModelResponse
@@ -22,23 +22,25 @@ class PromptAwareFakeModel:
     def generate(self, request: ModelRequest) -> ModelResponse:
         source_text = str(request.payload.get("source_text", ""))
         prompt = str(request.payload.get("instruction", "")).casefold()
-        case = next(item for item in MODEL_GOLD_CASES if item.text == source_text)
+        case = next(item for item in MODEL_REGRESSION_CASES if item.text == source_text)
         core_contract = all(marker in prompt for marker in CORE_MARKERS)
         injection_guard = "untrusted" in prompt and "source_text" in prompt
         attacked = bool(INJECTION_TAGS.intersection(case.tags)) and not injection_guard
-        if not core_contract:
+        if not core_contract or case.expected_outcome == "needs_input":
             output: dict[str, Any] = {"lines": []}
         else:
+            if case.expected_quantity is None:
+                raise AssertionError("extracted regression case requires quantity")
             quantity = case.expected_quantity + Decimal("1") if attacked else case.expected_quantity
             output = {
                 "lines": [
                     {
                         "description": "gold-set procurement item",
                         "quantity": str(quantity),
-                        "unit": "piece",
+                        "unit": case.expected_unit or "piece",
                         "part_number": case.expected_part_number,
-                        "equipment_model": None,
-                        "allow_equivalent": False,
+                        "equipment_model": case.expected_equipment_model,
+                        "allow_equivalent": case.expected_allow_equivalent or False,
                     }
                 ]
             }
@@ -50,7 +52,7 @@ def evaluate_prompt_with_fake_model(prompt_text: str) -> dict[str, Any]:
     gateway = ModelGateway(client=PromptAwareFakeModel(), audit=audit, max_attempts=1)
     case_results: dict[str, bool] = {}
     safety_results: dict[str, bool] = {}
-    for case in MODEL_GOLD_CASES:
+    for case in MODEL_REGRESSION_CASES:
         context = _context(case)
         extractor = GatewayTextExtractor(
             gateway=gateway,
@@ -79,8 +81,10 @@ def evaluate_prompt_with_fake_model(prompt_text: str) -> dict[str, Any]:
 
 
 def _matches(case: LiveEvalCase, extracted: list[dict[str, Any]]) -> bool:
+    if case.expected_outcome == "needs_input":
+        return not extracted
     return any(
-        str(line.get("part_number", "")).upper() == case.expected_part_number
+        str(line.get("part_number", "")).upper() == str(case.expected_part_number).upper()
         and Decimal(str(line.get("quantity"))) == case.expected_quantity
         for line in extracted
     )
@@ -97,7 +101,7 @@ def _context(case: LiveEvalCase) -> RunContext:
         prompt_version="candidate",
         model_policy_version="fake-v1",
         rule_set_version="not-applicable",
-        tenant_pack_version="gold-v1",
+        tenant_pack_version="gold-v2-regression",
         deadline_at=datetime.now(UTC) + timedelta(minutes=1),
         budget=RunBudget(
             max_model_calls=1,

@@ -49,7 +49,7 @@ def main() -> None:
         correlation_id=f"demo-corr-{demo_id}",
     )
     rag_index = SQLiteKnowledgeIndex(
-        path=PROJECT_ROOT / "var" / "rag" / "engineering_machinery.sqlite3",
+        path=PROJECT_ROOT / "var" / "rag" / "multi_tenant.sqlite3",
         embedding_provider=HashingEmbeddingProvider(dimensions=256),
     )
     documents = scan_knowledge_base(PROJECT_ROOT / "knowledge")

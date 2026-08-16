@@ -8,7 +8,7 @@ from time import perf_counter
 from typing import Any
 
 from procureops.agents import LLMSupervisorWorkflow, SingleAgentWorkflow, SupervisorWorkflow
-from procureops.agents.single import default_policy
+from procureops.agents.single import policy_for_tenant
 from procureops.demo import seed_demo_database
 from procureops.domain.enums import TaskStatus
 from procureops.domain.models import RunBudget, RunContext
@@ -127,7 +127,7 @@ class EvaluationRunner:
             agent = SingleAgentWorkflow(
                 repository=self.repository,
                 tool_gateway=gateway,
-                policy=default_policy(self.project_root),
+                policy=policy_for_tenant(self.project_root, case.tenant_id),
                 retriever=self.retriever,
                 memory_service=self.memory_service,
             )
@@ -135,7 +135,7 @@ class EvaluationRunner:
             agent = SupervisorWorkflow(
                 repository=self.repository,
                 tool_gateway=gateway,
-                policy=default_policy(self.project_root),
+                policy=policy_for_tenant(self.project_root, case.tenant_id),
                 retriever=self.retriever,
                 memory_service=self.memory_service,
             )
@@ -146,7 +146,7 @@ class EvaluationRunner:
                 repository=self.repository,
                 tool_gateway=gateway,
                 model_gateway=ModelGateway(client=self.model_client, audit=audit),
-                policy=default_policy(self.project_root),
+                policy=policy_for_tenant(self.project_root, case.tenant_id),
                 context=context,
                 retriever=self.retriever,
                 memory_service=self.memory_service,
@@ -300,10 +300,10 @@ class EvaluationRunner:
         return RunContext(
             run_id=f"run-{case.case_id.lower()}-{suffix}",
             task_id=f"task-{case.case_id.lower()}-{suffix}",
-            tenant_id="tenant_engineering_machinery",
+            tenant_id=case.tenant_id,
             actor_id="eval-buyer",
             actor_roles=frozenset({"procurement_operator"}),
-            workflow_version="1.0.0",
+            workflow_version="1.1.0",
             prompt_version="1.0.0",
             model_policy_version="1.0.0",
             rule_set_version="1.0.0",

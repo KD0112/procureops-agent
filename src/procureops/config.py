@@ -4,6 +4,19 @@ import os
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_API_PORT = 8030
+
+
+def api_port_from_environment() -> int:
+    """Return the explicitly configured local API port with fail-closed validation."""
+    raw_value = os.environ.get("PROCUREOPS_API_PORT", str(DEFAULT_API_PORT))
+    try:
+        port = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("PROCUREOPS_API_PORT must be an integer") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError("PROCUREOPS_API_PORT must be between 1 and 65535")
+    return port
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:

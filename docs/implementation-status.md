@@ -2,11 +2,24 @@
 
 | 能力 | 状态 | 主要实现 | 自动化证据 |
 |---|---|---|---|
+| RepoPilot 编码助手 Skill | added, bounded | `codeops/`、`skills/repo_change_review/SKILL.md`、`POST /api/skills/repo-change-review` | 工作区隔离、哈希防覆盖、命令 allowlist、测试门禁、diff 和审批停点 |
+| CI 代码问题诊断闭环 | added, bounded | `repo_diagnose_ci`、`POST /api/skills/repo-ci-repair`、`scripts/run_ci_repair_benchmark.py` | 只读日志分类、隔离修复、测试门禁、Diff SHA-256、人工审批停点 |
+| Repo 只读 MCP Profile | added, read-only | `scripts/run_repo_mcp_server.py` | `scripts/smoke_repo_mcp.py` 完成 initialize/tools/list/tools/call 验证 |
+| Coding-agent Harness 评估 | added | `scripts/run_codeops_benchmark.py`, `data/evals/code_agent_v1.jsonl` | 30 cases；status accuracy/source isolation/blocked-approval precision 均为 1.000 |
+| Docker MySQL/Redis/Streams Profile | added, locally accepted | `docker-compose.infra.yml`, `scripts/smoke_infra.py` | WSL 2.7.11 + Docker Server 29.7.2；真实 infrastructure smoke PASS |
+| Quality dataset v3 | added | `data/evals/agent_quality_v3.jsonl` | 200 cases, development/regression/holdout, memory/RAG/noise/tool/latency/context coverage |
+| Langfuse observability | added, opt-in | `src/procureops/observability/` | API/worker spans, audit mapping, privacy-safe redaction, disabled by default |
+| DeepEval adapter | added, opt-in | `evals/deepeval_adapter.py`, `scripts/run_deepeval.py` | answer relevancy, faithfulness and contextual RAG metrics |
+| Quantitative benchmark | added | `scripts/run_quality_benchmark.py`, `reports/latest_quality_benchmark.md` | success, safety, evidence, P50/P95, tool/model calls and cost |
+| RAG latency benchmark | added | `scripts/run_rag_latency_benchmark.py` | baseline vs HNSW latency and Recall/Precision/MRR/nDCG |
+| Lost-in-the-middle benchmark | added | `scripts/run_lost_middle_benchmark.py` | edge/middle accuracy, middle drop and position-aware packing |
 | Harness | 已实现 v1 | `harness/` | 审批、幂等、RBAC、预算、重试、脱敏测试 |
 | SQLite 与迁移 | 已实现 | `storage/migrations/` | 租户隔离、乐观锁、持久幂等测试 |
 | 任务状态机 | 已实现 | `workflows/state_machine.py` | 合法路径与越级拒绝测试 |
 | 成本计算 | 已实现 | `domain/costing.py` | Decimal、四舍五入、库存边界测试 |
 | 多格式 Intake | 已实现 | `intake/` | 文本、Excel、PDF、图片/FakeVision 测试 |
+| 多附件任务 | 已实现 | Intake Bundle、上传 API、工作台 | 最多 5 个附件、大小门禁、重复行合并、多源证据、冲突人工确认 |
+| 任务删除 | 已实现软归档 | API、工作台、迁移 008 | 创建人/合规权限、待处理 Job 终止、附件/证据/PO/审计保留 |
 | 单 Agent 闭环 | 已实现 | `agents/single.py` | 暂停审批、恢复、证据、PO 草稿测试 |
 | 受治理 RAG | 已实现 SQLite 持久化混合索引 | `rag/`、`knowledge/` | ACL、租户隔离、引用、索引陈旧和动态事实边界测试 |
 | 用户记忆 | 已实现安全闭环 | `memory/`、网站记忆中心 | 候选、确认、纠错、删除、TTL、偏好优先级、完整性哈希、访问审计、投毒与策略覆盖拒绝测试 |
@@ -19,7 +32,13 @@
 | 动态物流 | 已实现 | `logistics_quotes`、`logistics_quote` 工具 | 租户隔离、时效、证据、Decimal 运费覆盖与索引计划测试 |
 | 本地身份与职责分离 | 已实现免密码本机模式 | `auth/`、Bearer 会话、网站身份切换 | 自动采购人身份、服务端角色、会话过期/注销、请求头伪造拒绝和 maker-checker 测试 |
 | 事务 Outbox | 已实现 | `worker/outbox.py`、迁移 006 | 任务/上传/工作意图原子写入、幂等投递、dispatching 崩溃恢复测试 |
-| 第二租户 | 按要求暂缓 | Tenant Pack 接口已保留 | 后续跨行业验收 |
+| 第二租户 | 已实现 | `tenant_enterprise_it` Tenant Pack、目录、规则、知识与网站租户切换 | 同一工作流 IT happy path、RAG/目录隔离、API maker-checker 与 20 条跨租户评测 |
+| ERP/供应商/物流集成 | 已实现生产形态适配层 | `integrations/`、`run_integration_sandbox.py` | HTTP 鉴权、HTTPS/回环限制、超时与状态码分类、Schema/租户校验、审批哈希、PO 幂等和外部回执投影测试 |
+| SSE 任务事件流 | 已实现 | API 持久事件流、前端授权 fetch stream | Last-Event-ID、heartbeat、终态关闭、租户隔离和脱敏测试 |
+| 只读 MCP | 已实现可选 Profile | `integrations/mcp.py`、`run_mcp_sandbox.py` | initialize、tools/list、tools/call、只读白名单、租户/Schema 校验和写工具拒绝 |
+| BM25 + Vector + RRF | 已实现 | `rag/embeddings.py`、`rag/retrieval.py`、`rag/evaluation.py` | ACL 前置过滤、双路排名、RRF、索引指纹和 6 条检索评测 |
+| Evidence Judge | 已实现模型研究路径 | `agents/research_evidence.py`、`agents/supplier_research.py` | 来源/时间/哈希/可信层级、冲突、投毒、动态事实拒绝和确定性最终选商 |
+| Live Model / Holdout | 已实现 v2 治理 | `evals/live_model.py`、`model_gold_v2.jsonl` | development/regression/locked holdout、质量/安全/P95/Token/成本/基线门禁 |
 
 ## 当前限制
 
@@ -30,3 +49,6 @@
 - 三路多 Agent 对照当前未展示质量或安全收益，因此默认仍为单 Agent；模型路径保留用于真实样本实验。
 - “自主进化”不表示生产自改代码：当前只能形成候选并经过离线门禁与人工发布。
 - 本机没有 `DASHSCOPE_API_KEY`，因此没有伪造千问真实分数；Qwen 路由通过 FakeTransport/FakeModel 验证，真实 Gold Set 运行待密钥补齐。
+- 外部系统的本机沙箱只证明企业集成契约和故障治理；真实生产连接仍需要目标企业提供 UAT Endpoint、服务账号、网络白名单和字段映射。
+- 当前运行状态（2026-08-15）：真实模型开关关闭；已配置 DeepSeek `deepseek-v4-flash` 文本路由和智谱 `glm-4.1v-thinking-flash` 视觉路由，但普通网站验收不会调用它们。Docker/WSL2 本机 Profile 已通过真实 smoke；API 模型通常不是永久免费，是否收费取决于 Provider 套餐。
+- Evidence Judge 和有界 Supplier Research 属于 `multi_llm`/独立注入的研究路径；默认 `single` 直接走只读业务工具和确定性选商，不启动模型研究循环。

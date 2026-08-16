@@ -31,6 +31,7 @@ class LLMSupervisorWorkflow:
         context: RunContext,
         retriever: Retriever | None = None,
         memory_service: MemoryService | None = None,
+        supplier_evidence_tool_name: str | None = None,
     ) -> None:
         self.trace = SupervisorTrace()
         self.context = context
@@ -39,6 +40,7 @@ class LLMSupervisorWorkflow:
         supplier_researcher = BoundedSupplierResearchAgent(
             model_gateway=model_gateway,
             tool_gateway=tool_gateway,
+            evidence_tool_name=supplier_evidence_tool_name,
         )
         self.workflow = SingleAgentWorkflow(
             repository=repository,

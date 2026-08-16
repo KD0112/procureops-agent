@@ -206,13 +206,13 @@ class SingleAgentWorkflow:
                 item_id=str(row["item_id"]),
                 field_name="matched_product_id",
                 value=candidate.product_id,
-                source_type="database",
+                source_type=_source_type(candidate.source_system),
                 source_id=candidate.product_id,
-                locator=f"products:{candidate.product_id}",
+                locator=candidate.source_locator,
                 observed_at=datetime.now(UTC),
                 valid_until=None,
                 confidence=candidate.score,
-                producer="catalog_lookup_v1",
+                producer="catalog_lookup_v2",
             )
             matched.append((row, candidate))
         if questions:
@@ -315,13 +315,13 @@ class SingleAgentWorkflow:
                     item_id=str(row["item_id"]),
                     field_name=field_name,
                     value=value,
-                    source_type="database_tool",
+                    source_type=_source_type(selected.source_system),
                     source_id=selected.quotation_id,
-                    locator=f"quotation:{selected.quotation_id}",
+                    locator=selected.source_locator,
                     observed_at=selected.observed_at,
                     valid_until=selected.valid_until,
                     confidence=Decimal("1"),
-                    producer="supplier_lookup_v1",
+                    producer="supplier_lookup_v2",
                 )
             self.repository.add_evidence(
                 tenant_id=context.tenant_id,
@@ -329,15 +329,13 @@ class SingleAgentWorkflow:
                 item_id=str(row["item_id"]),
                 field_name="logistics_lead_time_days",
                 value=decision.logistics_quote.lead_time_days,
-                source_type="database_tool",
+                source_type=_source_type(decision.logistics_quote.source_system),
                 source_id=decision.logistics_quote.logistics_quote_id,
-                locator=(
-                    f"logistics_quotes:{decision.logistics_quote.logistics_quote_id}"
-                ),
+                locator=decision.logistics_quote.source_locator,
                 observed_at=decision.logistics_quote.observed_at,
                 valid_until=decision.logistics_quote.valid_until,
                 confidence=Decimal("1"),
-                producer="logistics_quote_v1",
+                producer="logistics_quote_v2",
             )
             self.repository.add_evidence(
                 tenant_id=context.tenant_id,
@@ -345,15 +343,13 @@ class SingleAgentWorkflow:
                 item_id=str(row["item_id"]),
                 field_name="freight",
                 value=decision.logistics_quote.shipping_cost,
-                source_type="database_tool",
+                source_type=_source_type(decision.logistics_quote.source_system),
                 source_id=decision.logistics_quote.logistics_quote_id,
-                locator=(
-                    f"logistics_quotes:{decision.logistics_quote.logistics_quote_id}"
-                ),
+                locator=decision.logistics_quote.source_locator,
                 observed_at=decision.logistics_quote.observed_at,
                 valid_until=decision.logistics_quote.valid_until,
                 confidence=Decimal("1"),
-                producer="logistics_quote_v1",
+                producer="logistics_quote_v2",
             )
             self.repository.add_evidence(
                 tenant_id=context.tenant_id,
@@ -401,6 +397,17 @@ class SingleAgentWorkflow:
                         [item.model_dump(mode="json") for item in research_result.steps]
                         if research_result is not None
                         else []
+                    ),
+                    "research_evidence": (
+                        {
+                            "accepted": len(research_result.evidence_judgment.accepted),
+                            "rejected": len(research_result.evidence_judgment.rejected),
+                            "conflicts": list(research_result.evidence_judgment.conflicts),
+                            "searches": research_result.evidence_searches,
+                        }
+                        if research_result is not None
+                        and research_result.evidence_judgment is not None
+                        else None
                     ),
                 },
             )
@@ -648,11 +655,19 @@ class SingleAgentWorkflow:
         return preferences
 
 
-def default_policy(project_root: Path) -> ProcurementPolicy:
+def policy_for_tenant(project_root: Path, tenant_id: str) -> ProcurementPolicy:
     return ProcurementPolicy.from_file(
         project_root
         / "data"
         / "tenant_packs"
-        / "tenant_engineering_machinery"
+        / tenant_id
         / "rules.json"
     )
+
+
+def default_policy(project_root: Path) -> ProcurementPolicy:
+    return policy_for_tenant(project_root, "tenant_engineering_machinery")
+
+
+def _source_type(source_system: str) -> str:
+    return "external_system_tool" if ":http_" in source_system else "database_tool"

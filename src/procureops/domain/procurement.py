@@ -29,6 +29,8 @@ class ProductCandidate(BaseModel):
     unit: str
     score: Decimal = Field(ge=0, le=1)
     match_reasons: tuple[str, ...]
+    source_system: str = "operational_database"
+    source_locator: str = "products"
 
 
 class SupplierOption(BaseModel):
@@ -47,6 +49,8 @@ class SupplierOption(BaseModel):
     available_quantity: Decimal = Field(ge=0)
     observed_at: datetime
     valid_until: datetime
+    source_system: str = "operational_database"
+    source_locator: str = "quotations"
 
 
 class LogisticsQuote(BaseModel):
@@ -60,6 +64,8 @@ class LogisticsQuote(BaseModel):
     shipping_cost: Decimal = Field(ge=0)
     observed_at: datetime
     valid_until: datetime
+    source_system: str = "operational_database"
+    source_locator: str = "logistics_quotes"
 
 
 class CostLine(BaseModel):

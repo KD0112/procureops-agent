@@ -1,7 +1,9 @@
 const state = {
-  tasks: [], selected: null, detail: null, memory: [], governance: null, models: null,
+  tasks: [], selected: null, detail: null, memory: [], governance: null, models: null, tenants: [], integrationProfile: "local",
   token: window.sessionStorage.getItem("procureops_token"), identity: null,
+  eventStreamAbort: null, lastEventSequence: 0, detailRefreshTimer: null,
 };
+const expectedBackend = { apiVersion: "0.5.0", identityApi: "local-session-v1" };
 const $ = (selector) => document.querySelector(selector);
 const statusLabel = {
   draft: "草稿", ingesting: "解析中", needs_input: "待补充", matching: "目录匹配",
@@ -17,8 +19,22 @@ async function api(path, options = {}) {
   if (response.status === 401 && path !== "/api/auth/local-session") {
     state.token = null; window.sessionStorage.removeItem("procureops_token");
   }
+  if (response.status === 404 && path === "/api/auth/local-session") {
+    const error = new Error("当前页面连接到了旧版后端，请停止旧服务后在 project2 中重新运行 scripts\\run_api.py；默认验收地址为 127.0.0.1:8030。");
+    error.code = "BACKEND_VERSION_MISMATCH";
+    throw error;
+  }
   if (!response.ok) throw new Error(payload.detail || `请求失败：${response.status}`);
   return payload;
+}
+
+async function checkBackendCompatibility() {
+  const health = await api("/health");
+  if (health.api_version !== expectedBackend.apiVersion || health.identity_api !== expectedBackend.identityApi) {
+    const error = new Error("网页与后端版本不一致。请在启动旧服务的终端按 Ctrl+C，再从 D:\\new things\\项目1\\project2 重新启动网站。");
+    error.code = "BACKEND_VERSION_MISMATCH";
+    throw error;
+  }
 }
 
 function openIdentityDialog() {
@@ -26,10 +42,17 @@ function openIdentityDialog() {
   if (!dialog.open) dialog.showModal();
 }
 
-async function startLocalSession(userId) {
+async function loadTenants() {
+  const payload = await api("/api/tenants"); state.tenants = payload.items || []; state.integrationProfile = payload.integration_profile || "local";
+  $("#integration-status").textContent = `SQLite · ${state.integrationProfile} · 可回放`;
+  const select = $("#identity-tenant-id");
+  if (select) select.innerHTML = state.tenants.map((tenant) => `<option value="${escapeHtml(tenant.tenant_id)}">${escapeHtml(tenant.display_name)}</option>`).join("");
+}
+
+async function startLocalSession(userId, tenantId = "tenant_engineering_machinery") {
   const session = await api("/api/auth/local-session", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user_id: userId, tenant_id: "tenant_engineering_machinery" }),
+    body: JSON.stringify({ user_id: userId, tenant_id: tenantId }),
   });
   state.token = session.token; window.sessionStorage.setItem("procureops_token", session.token);
   await loadIdentity();
@@ -37,18 +60,28 @@ async function startLocalSession(userId) {
 
 async function loadIdentity() {
   state.identity = await api("/api/auth/me");
-  $("#identity-status").textContent = `${state.identity.actor_id} · ${state.identity.roles.join(" / ")}`;
+  const tenant = state.tenants.find((item) => item.tenant_id === state.identity.tenant_id);
+  $("#current-tenant-name").textContent = tenant?.display_name || state.identity.tenant_id;
+  $("#identity-status").textContent = `${tenant?.display_name || state.identity.tenant_id} · ${state.identity.actor_id} · ${state.identity.roles.join(" / ")}`;
 }
 
 async function bootstrap() {
   try {
+    await checkBackendCompatibility();
+    await loadTenants();
     if (!state.token) await startLocalSession("local-buyer"); else await loadIdentity();
     await Promise.all([loadTasks(), loadModelStatus()]);
   } catch (error) {
     state.token = null; state.identity = null;
     window.sessionStorage.removeItem("procureops_token");
+    if (error.code === "BACKEND_VERSION_MISMATCH") {
+      openIdentityDialog();
+      $("#identity-error").textContent = error.message;
+      toast(error.message);
+      return;
+    }
     try {
-      await startLocalSession("local-buyer");
+      await startLocalSession("local-buyer", state.tenants[0]?.tenant_id || "tenant_engineering_machinery");
       await Promise.all([loadTasks(), loadModelStatus()]);
     } catch (fallbackError) { openIdentityDialog(); toast(fallbackError.message || error.message); }
   }
@@ -78,7 +111,10 @@ function renderTaskList() {
 }
 
 async function loadDetail(taskId) {
+  stopTaskEventStream();
   state.selected = taskId; state.detail = await api(`/api/tasks/${taskId}`); renderTaskList(); renderDetail();
+  state.lastEventSequence = Math.max(0, ...state.detail.events.map((item) => Number(item.sequence) || 0));
+  startTaskEventStream(taskId);
 }
 
 function showEmpty() { $("#empty-view").classList.remove("hidden"); $("#detail-view").classList.add("hidden"); }
@@ -88,6 +124,7 @@ function renderDetail() {
   const request = task.request || {}; $("#detail-title").textContent = request.filename || request.preview || "采购任务";
   $("#detail-id").textContent = task.task_id; $("#detail-status").textContent = statusLabel[task.status] || task.status;
   $("#detail-architecture").textContent = architectureLabel(request.architecture || "single");
+  $("#delete-task-button").classList.toggle("hidden", !detail.permissions?.can_archive);
   $("#metric-lines").textContent = detail.items.length; $("#metric-evidence").textContent = detail.evidence.length; $("#metric-jobs").textContent = detail.jobs.length;
   $("#metric-cost").textContent = detail.po_draft ? `¥ ${detail.po_draft.total_amount}` : pendingCost(detail);
   renderAction(detail); renderItems(detail.items); renderEvidence(detail.evidence); renderEvents(detail.events); renderPo(detail.po_draft);
@@ -100,14 +137,26 @@ function pendingCost(detail) {
 
 function renderAction(detail) {
   const panel = $("#action-panel"); const status = detail.task.status; panel.classList.add("hidden"); panel.innerHTML = "";
+  const queued = detail.jobs.some((job) => ["pending", "retry"].includes(job.status));
   if (status === "awaiting_approval") {
     const req = detail.pending_approval.approval_requirement; panel.classList.remove("hidden");
-    panel.innerHTML = `<div><h3>需要人工审批 · ¥ ${req.total_amount} ${req.currency}</h3><p>规则 ${req.ruleset_version} 要求角色：${req.required_roles.join("、")}</p></div><div class="action-buttons"><button class="secondary danger" id="reject-button">拒绝</button><button class="primary" id="approve-button">批准并生成 PO 草稿</button></div>`;
-    $("#approve-button").addEventListener("click", () => decide("approve")); $("#reject-button").addEventListener("click", () => decide("reject"));
+    if (detail.permissions?.can_approve) {
+      panel.innerHTML = `<div><h3>需要人工审批 · ¥ ${req.total_amount} ${req.currency}</h3><p>规则 ${req.ruleset_version} 要求角色：${req.required_roles.join("、")}</p></div><div class="action-buttons"><button class="secondary danger" id="reject-button">拒绝</button><button class="primary" id="approve-button">批准并生成 PO 草稿</button></div>`;
+      $("#approve-button").addEventListener("click", () => decide("approve")); $("#reject-button").addEventListener("click", () => decide("reject"));
+    } else {
+      const reason = detail.permissions?.approval_block_reason === "maker_checker"
+        ? "申请人与审批人必须是不同身份，当前申请人不能审批自己的任务。"
+        : `当前身份缺少审批角色：${req.required_roles.join("、")}。`;
+      panel.innerHTML = `<div><h3>等待独立审批人 · ¥ ${req.total_amount} ${req.currency}</h3><p>${reason}</p></div><button class="primary" id="switch-approver-button">切换审批身份</button>`;
+      $("#switch-approver-button").addEventListener("click", () => $("#switch-account-button").click());
+    }
+  } else if (status === "needs_input" && queued) {
+    panel.classList.remove("hidden"); panel.innerHTML = `<div><h3>补充信息已进入持久化队列</h3><p>原始图片和补充文本都已保留。请运行下一项 Worker，系统会从 Checkpoint 恢复处理。</p></div><button class="primary" id="process-button">立即处理补充信息</button>`;
+    $("#process-button").addEventListener("click", runWorker);
   } else if (status === "needs_input") {
     panel.classList.remove("hidden"); panel.innerHTML = `<div><h3>任务需要补充或修订信息</h3><p>请提供包含品名、数量、单位及零件号/设备型号的完整需求，系统会保留原始证据。</p></div><div class="action-buttons"><button class="primary" id="answer-button">补充信息</button></div>`;
     $("#answer-button").addEventListener("click", answerTask);
-  } else if (["draft", "failed_retryable"].includes(status) || detail.jobs.some((job) => ["pending", "retry"].includes(job.status))) {
+  } else if (["draft", "failed_retryable"].includes(status) || queued) {
     panel.classList.remove("hidden"); panel.innerHTML = `<div><h3>任务已进入持久化队列</h3><p>即使进程退出，Job 仍保存在 SQLite；重新运行 Worker 会继续处理。</p></div><button class="primary" id="process-button">立即处理</button>`;
     $("#process-button").addEventListener("click", runWorker);
   }
@@ -125,6 +174,69 @@ function renderEvents(items) {
   $("#event-list").innerHTML = items.length ? items.slice().reverse().map((item) => `<div class="timeline-item"><strong>${escapeHtml(item.event_type)}</strong><span>${new Date(item.occurred_at).toLocaleString("zh-CN")}</span></div>`).join("") : '<div class="empty">暂无工作流事件</div>';
 }
 
+function stopTaskEventStream() {
+  if (state.eventStreamAbort) state.eventStreamAbort.abort();
+  state.eventStreamAbort = null;
+  if (state.detailRefreshTimer) window.clearTimeout(state.detailRefreshTimer);
+  state.detailRefreshTimer = null;
+}
+
+function scheduleDetailRefresh(taskId) {
+  if (state.detailRefreshTimer) window.clearTimeout(state.detailRefreshTimer);
+  state.detailRefreshTimer = window.setTimeout(async () => {
+    state.detailRefreshTimer = null;
+    if (state.selected !== taskId) return;
+    try {
+      const detail = await api(`/api/tasks/${taskId}`);
+      if (state.selected !== taskId) return;
+      state.detail = detail;
+      state.lastEventSequence = Math.max(state.lastEventSequence, ...detail.events.map((item) => Number(item.sequence) || 0));
+      renderTaskList(); renderDetail();
+    } catch (error) {
+      if (error.name !== "AbortError") toast(error.message);
+    }
+  }, 150);
+}
+
+async function startTaskEventStream(taskId) {
+  const controller = new AbortController();
+  state.eventStreamAbort = controller;
+  try {
+    const response = await fetch(`/api/tasks/${taskId}/events/stream`, {
+      headers: {
+        Authorization: `Bearer ${state.token}`,
+        "Last-Event-ID": String(state.lastEventSequence),
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok || !response.body) throw new Error(`event stream failed: ${response.status}`);
+    const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+      let boundary;
+      while ((boundary = buffer.indexOf("\n\n")) >= 0) {
+        const block = buffer.slice(0, boundary); buffer = buffer.slice(boundary + 2);
+        if (!block || block.startsWith(":")) continue;
+        const dataLine = block.split("\n").find((line) => line.startsWith("data: "));
+        if (!dataLine) continue;
+        const item = JSON.parse(dataLine.slice(6));
+        state.lastEventSequence = Math.max(state.lastEventSequence, Number(item.sequence) || 0);
+        if (state.selected === taskId && state.detail && !state.detail.events.some((event) => event.sequence === item.sequence)) {
+          state.detail.events.push(item); renderEvents(state.detail.events); scheduleDetailRefresh(taskId);
+        }
+      }
+    }
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      window.setTimeout(() => {
+        if (state.selected === taskId && state.eventStreamAbort === controller) startTaskEventStream(taskId);
+      }, 1000);
+    }
+  }
+}
+
 function renderPo(po) {
   const panel = $("#po-panel"); if (!po) { panel.classList.add("hidden"); return; }
   panel.classList.remove("hidden"); $("#po-content").textContent = JSON.stringify(po, null, 2);
@@ -136,7 +248,19 @@ async function decide(decision) {
 
 async function answerTask() {
   const text = window.prompt("请输入完整修订后的采购需求："); if (!text) return;
-  try { await api(`/api/tasks/${state.selected}/answers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }); toast("补充信息已进入队列"); await loadDetail(state.selected); } catch (error) { toast(error.message); }
+  try { await api(`/api/tasks/${state.selected}/answers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }); toast("补充信息已进入队列，请运行 Worker"); await loadDetail(state.selected); } catch (error) { toast(error.message); }
+}
+
+async function archiveSelectedTask() {
+  if (!state.selected) return;
+  if (!window.confirm("确认删除此任务？它会从工作台隐藏并终止待处理 Job，但附件、证据、PO 与审计记录会按企业留存规则保留。")) return;
+  try {
+    await api(`/api/tasks/${state.selected}`, { method: "DELETE" });
+    stopTaskEventStream();
+    state.selected = null; state.detail = null;
+    toast("任务已归档，审计记录仍保留");
+    await loadTasks();
+  } catch (error) { toast(error.message); }
 }
 
 async function runWorker() {
@@ -238,12 +362,13 @@ async function rollbackRelease(event) {
 }
 
 $("#new-task-form").addEventListener("submit", async (event) => {
-  event.preventDefault(); const text = $("#task-text").value.trim(); const file = $("#task-file").files[0]; const architecture = $("#task-architecture").value;
-  if (!text && !file) { $("#form-error").textContent = "请输入采购需求或选择文件。"; return; }
+  event.preventDefault(); const text = $("#task-text").value.trim(); const files = Array.from($("#task-file").files); const architecture = $("#task-architecture").value;
+  if (!text && !files.length) { $("#form-error").textContent = "请输入采购需求或选择文件。"; return; }
+  if (files.length > 5) { $("#form-error").textContent = "单任务最多选择 5 个附件。"; return; }
   const button = $("#submit-task"); button.disabled = true; button.textContent = "正在创建…";
   try {
     let result;
-    if (file) { const form = new FormData(); form.append("file", file); form.append("architecture", architecture); result = await api("/api/tasks/upload", { method: "POST", body: form }); }
+    if (files.length) { const form = new FormData(); files.forEach((file) => form.append("file", file)); form.append("architecture", architecture); result = await api("/api/tasks/upload", { method: "POST", body: form }); }
     else { result = await api("/api/tasks/text", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, architecture }) }); }
     state.selected = result.task_id; $("#new-task-dialog").close(); $("#new-task-form").reset(); toast("任务已创建并持久化"); await loadTasks();
   } catch (error) { $("#form-error").textContent = error.message; }
@@ -254,17 +379,33 @@ function escapeHtml(value) { return String(value).replace(/[&<>'"]/g, (char) => 
 $("#identity-form").addEventListener("submit", async (event) => {
   event.preventDefault(); $("#identity-error").textContent = "";
   try {
-    await startLocalSession($("#identity-user-id").value); $("#identity-dialog").close();
+    await startLocalSession($("#identity-user-id").value, $("#identity-tenant-id").value); $("#identity-dialog").close();
+    state.selected = null; state.detail = null;
     await Promise.all([loadTasks(), loadModelStatus()]); toast("本机身份已切换");
   } catch (error) { $("#identity-error").textContent = error.message; }
 });
 $("#switch-account-button").addEventListener("click", async () => {
   try { if (state.token) await api("/api/auth/logout", { method: "POST" }); } catch {}
-  state.token = null; state.identity = null; window.sessionStorage.removeItem("procureops_token");
+  state.token = null; state.identity = null; state.selected = null; state.detail = null; window.sessionStorage.removeItem("procureops_token");
+  stopTaskEventStream();
   $("#identity-status").textContent = "请选择本机身份"; openIdentityDialog();
 });
 $("#feedback-form").addEventListener("submit", async (event) => { event.preventDefault(); const summary = $("#feedback-summary").value.trim(); if (!summary) return; try { await api("/api/governance/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback_type: $("#feedback-type").value, summary, correction: {} }) }); event.target.reset(); toast("反馈已进入治理队列"); await loadGovernance(); } catch (error) { toast(error.message); } });
 $("#memory-list").addEventListener("click", handleMemoryAction); $("#candidate-list").addEventListener("click", handleCandidateAction); $("#new-candidate-button").addEventListener("click", createCandidateFromFeedback);
-document.querySelectorAll(".dialog-close").forEach((button) => button.addEventListener("click", () => button.closest("dialog").close()));
+document.querySelectorAll(".dialog-close").forEach((button) => button.addEventListener("click", () => {
+  const dialog = button.closest("dialog");
+  if (dialog.id === "identity-dialog" && !state.identity) {
+    $("#identity-error").textContent = "请先建立有效身份；如果提示后端版本不一致，请重启当前 project2 网站。";
+    return;
+  }
+  dialog.close();
+}));
+$("#identity-dialog").addEventListener("cancel", (event) => {
+  if (!state.identity) {
+    event.preventDefault();
+    $("#identity-error").textContent = "必须先建立有效身份才能进入采购工作台。";
+  }
+});
 $("#new-task-button").addEventListener("click", openDialog); $("#welcome-new-button").addEventListener("click", openDialog); $("#memory-button").addEventListener("click", () => openMemory().catch((error) => toast(error.message))); $("#governance-button").addEventListener("click", () => openGovernance().catch((error) => toast(error.message))); $("#refresh-button").addEventListener("click", () => loadTasks()); $("#worker-button").addEventListener("click", runWorker);
-bootstrap(); window.setInterval(() => { if (state.token && state.selected) loadDetail(state.selected).catch(() => {}); }, 4000);
+$("#delete-task-button").addEventListener("click", archiveSelectedTask);
+bootstrap();

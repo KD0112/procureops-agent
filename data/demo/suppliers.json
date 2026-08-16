@@ -1,5 +1,5 @@
 [
-  {"supplier_id":"supplier-alpha","name":"合成供应商甲","approved":true,"risk_level":"low"},
-  {"supplier_id":"supplier-beta","name":"合成供应商乙","approved":true,"risk_level":"medium"},
-  {"supplier_id":"supplier-unapproved","name":"未准入演示供应商","approved":false,"risk_level":"high"}
+  {"supplier_id":"supplier-alpha","name":"合成供应商甲","approved":true,"risk_level":"low","price_multiplier":"1.00","freight":"45.00","inventory_base":20,"shipping_method":"standard_freight","lead_time_days":3,"shipping_cost":"45.00"},
+  {"supplier_id":"supplier-beta","name":"合成供应商乙","approved":true,"risk_level":"medium","price_multiplier":"0.97","freight":"80.00","inventory_base":20,"shipping_method":"priority_freight","lead_time_days":1,"shipping_cost":"80.00"},
+  {"supplier_id":"supplier-unapproved","name":"未准入演示供应商","approved":false,"risk_level":"high","price_multiplier":"0.80","freight":"20.00","inventory_base":20,"shipping_method":"economy_freight","lead_time_days":5,"shipping_cost":"20.00"}
 ]

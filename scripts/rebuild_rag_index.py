@@ -10,15 +10,20 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from procureops.rag import HashingEmbeddingProvider, SQLiteKnowledgeIndex  # noqa: E402
+from procureops.config import load_environment  # noqa: E402
+from procureops.rag import (  # noqa: E402
+    SQLiteKnowledgeIndex,
+    embedding_provider_from_environment,
+)
 from procureops.rag.governance import scan_knowledge_base  # noqa: E402
 
 
 def main() -> None:
+    load_environment(PROJECT_ROOT)
     documents = scan_knowledge_base(PROJECT_ROOT / "knowledge")
     index = SQLiteKnowledgeIndex(
-        path=PROJECT_ROOT / "var" / "rag" / "engineering_machinery.sqlite3",
-        embedding_provider=HashingEmbeddingProvider(dimensions=256),
+        path=PROJECT_ROOT / "var" / "rag" / "multi_tenant.sqlite3",
+        embedding_provider=embedding_provider_from_environment(),
     )
     chunk_count = index.rebuild(documents)
     metadata = index.metadata()

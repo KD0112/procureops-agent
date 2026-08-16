@@ -1,0 +1,10 @@
+[
+  {"product_id":"it-laptop-dev-14","sku":"IT-LAP-DEV-14","name":"14 英寸研发笔记本标准款","category":"终端设备","aliases":["研发笔记本","开发笔记本","程序员电脑"],"compatibility_tags":["32GB","1TB","3Y_ONSITE"],"unit":"台","demo_unit_price":"7800.00"},
+  {"product_id":"it-monitor-27-4k","sku":"IT-MON-27-4K","name":"27 英寸 4K 商用显示器","category":"终端外设","aliases":["4K显示器","27寸显示器","研发显示器"],"compatibility_tags":["3840x2160","USB-C"],"unit":"台","demo_unit_price":"2400.00"},
+  {"product_id":"it-dock-tbt4","sku":"IT-DOCK-TBT4","name":"雷电 4 企业扩展坞","category":"终端外设","aliases":["雷电扩展坞","笔记本扩展坞","Thunderbolt Dock"],"compatibility_tags":["TB4","100W_PD"],"unit":"个","demo_unit_price":"1350.00"},
+  {"product_id":"it-server-rack-2u","sku":"IT-SRV-RACK-2U","name":"2U 双路机架式服务器标准款","category":"数据中心设备","aliases":["2U服务器","机架服务器","双路服务器"],"compatibility_tags":["DUAL_CPU","RAID","5Y_SUPPORT"],"unit":"台","demo_unit_price":"46800.00"},
+  {"product_id":"it-switch-48p-poe","sku":"IT-NET-SW-48P","name":"48 口 PoE+ 企业接入交换机","category":"网络设备","aliases":["48口交换机","PoE交换机","接入交换机"],"compatibility_tags":["48P","POE_PLUS","STACK"],"unit":"台","demo_unit_price":"12800.00"},
+  {"product_id":"it-firewall-medium","sku":"IT-SEC-FW-M","name":"中型园区下一代防火墙","category":"安全设备","aliases":["园区防火墙","下一代防火墙","NGFW"],"compatibility_tags":["HA","3Y_LICENSE"],"unit":"台","demo_unit_price":"35800.00"},
+  {"product_id":"it-ups-3kva","sku":"IT-UPS-3KVA","name":"3kVA 在线式 UPS","category":"数据中心设备","aliases":["3K UPS","在线式UPS","机房UPS"],"compatibility_tags":["ONLINE","SNMP"],"unit":"台","demo_unit_price":"9200.00"},
+  {"product_id":"it-ssd-3840","sku":"IT-SSD-3T84","name":"3.84TB 企业级数据中心 SSD","category":"服务器配件","aliases":["企业级SSD","3.84T固态盘","数据中心SSD"],"compatibility_tags":["3.84TB","DWPD1"],"unit":"块","demo_unit_price":"6100.00"}
+]

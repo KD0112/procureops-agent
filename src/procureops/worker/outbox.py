@@ -163,6 +163,33 @@ class SQLiteOutbox:
             )
         return job
 
+    def event_payload(self, *, event_id: str) -> dict[str, Any]:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM outbox_events WHERE event_id=?",
+                (event_id,),
+            ).fetchone()
+        if row is None:
+            raise KeyError("outbox event not found")
+        return {
+            "event_id": str(row["event_id"]),
+            "tenant_id": str(row["tenant_id"]),
+            "task_id": str(row["aggregate_id"]),
+            "idempotency_key": str(row["idempotency_key"]),
+            **json.loads(row["payload_json"]),
+        }
+
+    def mark_dispatched(self, *, event_id: str) -> None:
+        with self.database.transaction() as connection:
+            connection.execute(
+                """
+                UPDATE outbox_events
+                SET status='dispatched', dispatched_at=?
+                WHERE event_id=? AND status IN ('pending', 'dispatching')
+                """,
+                (datetime.now(UTC).isoformat(), event_id),
+            )
+
     def events(self, *, tenant_id: str) -> tuple[dict[str, Any], ...]:
         with self.database.connect() as connection:
             rows = connection.execute(

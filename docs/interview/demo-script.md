@@ -9,7 +9,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 & ".\.venv\Scripts\python.exe" scripts\run_api.py
 ```
 
-浏览器打开 `http://127.0.0.1:8000`。工作台中的“运行下一项 Worker”按钮用于逐步演示；也可以在第二个终端运行：
+浏览器打开 `http://127.0.0.1:8030`。工作台中的“运行下一项 Worker”按钮用于逐步演示；也可以在第二个终端运行：
 
 ```powershell
 & ".\.venv\Scripts\python.exe" scripts\run_worker.py --loop

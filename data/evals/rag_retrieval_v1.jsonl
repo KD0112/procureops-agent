@@ -1,0 +1,6 @@
+{"dataset_version":"1.0.0","case_id":"rag-001","tenant_id":"tenant_engineering_machinery","actor_roles":["procurement_operator"],"query":"R3 approval role subject hash","expected_document_ids":["EM-POL-APPROVAL-001"],"k":3}
+{"dataset_version":"1.0.0","case_id":"rag-002","tenant_id":"tenant_engineering_machinery","actor_roles":["procurement_operator"],"query":"Top 2 SKU catalog matching","expected_document_ids":["EM-GUIDE-CATALOG-001"],"k":3}
+{"dataset_version":"1.0.0","case_id":"rag-003","tenant_id":"tenant_engineering_machinery","actor_roles":["procurement_operator"],"query":"supplier approved risk quotation","expected_document_ids":["EM-POL-SUPPLIER-001"],"k":3}
+{"dataset_version":"1.0.0","case_id":"rag-004","tenant_id":"tenant_engineering_machinery","actor_roles":["procurement_operator"],"query":"报价 库存 物流 时效 有效期","expected_document_ids":["EM-POL-QUOTE-001"],"k":3}
+{"dataset_version":"1.0.0","case_id":"rag-005","tenant_id":"tenant_enterprise_it","actor_roles":["procurement_operator"],"query":"IT-LAP-DEV-14 SKU","expected_document_ids":["IT-GUIDE-CATALOG-001"],"k":2}
+{"dataset_version":"1.0.0","case_id":"rag-006","tenant_id":"tenant_enterprise_it","actor_roles":["procurement_operator"],"query":"CPU RAID SSD server","expected_document_ids":["IT-GUIDE-CATALOG-001"],"k":2}

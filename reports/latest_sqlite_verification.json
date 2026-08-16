@@ -1,9 +1,10 @@
 {
-  "created_at": "2026-08-08T08:06:38.432140+00:00",
+  "created_at": "2026-08-09T06:02:30.201884+00:00",
   "database": "sqlite",
   "foreign_key_violations": 0,
   "index_checks": {
     "active_memory": true,
+    "active_task_list": true,
     "auth_session": true,
     "logistics_lookup": true,
     "outbox_dispatch": true
@@ -16,13 +17,17 @@
     "004_api_worker",
     "005_governed_learning",
     "006_enterprise_depth",
-    "007_passwordless_local_identity"
+    "007_passwordless_local_identity",
+    "008_task_bundle_and_archival"
   ],
   "passed": true,
   "query_plans": {
     "active_memory": [
       "SEARCH memory_records USING INDEX idx_memory_active (tenant_id=? AND user_id=? AND status=?)",
       "USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "active_task_list": [
+      "SEARCH procurement_tasks USING INDEX idx_tasks_active (tenant_id=? AND deleted_at=?)"
     ],
     "auth_session": [
       "SEARCH auth_sessions USING INDEX sqlite_autoindex_auth_sessions_2 (token_hash=?)"

@@ -8,7 +8,7 @@
   "require_citations": true,
   "deny_dynamic_facts": true,
   "hybrid_weights": {
-    "semantic": 0.7,
-    "keyword": 0.3
+    "semantic": 0.5,
+    "keyword": 0.5
   }
 }
