@@ -1,5 +1,7 @@
 # ProcureOps Agent
 
+[![ProcureOps CI](https://github.com/KD0112/procureops-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/KD0112/procureops-agent/actions/workflows/ci.yml)
+
 ProcureOps Agent 是一个以采购任务为中心的企业 Agent 项目。第一阶段先实现可审计、可回放、默认拒绝的 Harness，再接入单 Agent 采购闭环，最后通过对照评测决定是否保留多 Agent 架构。
 
 ## 当前状态
