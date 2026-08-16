@@ -346,3 +346,7 @@ $env:PROCUREOPS_QUEUE_BACKEND="redis-streams"
 上面的“等待重启”是历史记录，已由本次实机验收关闭：WSL 2.7.11 与 Docker Server 29.7.2 已正常运行，`mysql:8.4` 和 `redis:7.4-alpine` 容器已启动。设置 MySQL、Redis 和 Redis Streams 环境变量后，`scripts/smoke_infra.py` 输出 `enterprise infrastructure smoke: PASS`，真实覆盖 schema、JOIN、事务 Outbox、Redis TTL、Streams claim/ACK 和 API readiness。当前可以把 MySQL/Redis/Streams 标记为本机 Profile 已验收，但仍不能称为生产部署。
 
 本轮还修复了 smoke 与实现接口不一致、MySQL 8.4 弃用语法和 `BOOLEAN` display-width 警告。project2 全量测试、Ruff、compileall 通过；day1 独立环境为 `54 passed, 5 subtests passed`。
+
+### 真实证据更新（2026-08-16）
+
+本机重启后的最新 smoke 结果已保存为 `reports/latest_docker_smoke.json`。后续重新验收应覆盖该报告并记录 Docker/镜像版本；这项 smoke 只证明开发机基础设施链路，不代表 HA、灾备或生产容量。

@@ -10,6 +10,8 @@
 | Quality dataset v3 | added | `data/evals/agent_quality_v3.jsonl` | 200 cases, development/regression/holdout, memory/RAG/noise/tool/latency/context coverage |
 | Langfuse observability | added, opt-in | `src/procureops/observability/` | API/worker spans, audit mapping, privacy-safe redaction, disabled by default |
 | DeepEval adapter | added, opt-in | `evals/deepeval_adapter.py`, `scripts/run_deepeval.py` | answer relevancy, faithfulness and contextual RAG metrics |
+| Real CommerceOps quality evidence | added, locally executed | `scripts/prepare_deepeval_commerce.py`, `data/evals/commerce_ops_human_labeled_v1.jsonl` | 5 real DeepSeek outputs；5 条人工审核草案；DeepEval 结果见 `reports/latest_deepeval_commerce_ops.json` |
+| Langfuse trace smoke | added, credential-gated | `scripts/run_langfuse_trace_smoke.py` | 当前无 Langfuse 凭据，报告明确记录 `BLOCKED_MISSING_CREDENTIALS`，不伪造云端 trace |
 | Quantitative benchmark | added | `scripts/run_quality_benchmark.py`, `reports/latest_quality_benchmark.md` | success, safety, evidence, P50/P95, tool/model calls and cost |
 | RAG latency benchmark | added | `scripts/run_rag_latency_benchmark.py` | baseline vs HNSW latency and Recall/Precision/MRR/nDCG |
 | Lost-in-the-middle benchmark | added | `scripts/run_lost_middle_benchmark.py` | edge/middle accuracy, middle drop and position-aware packing |

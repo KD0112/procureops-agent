@@ -117,12 +117,12 @@ class CommerceAnalyticsStore:
         text = query.casefold()
         if any(token in text for token in ("退货率", "退货", "return")):
             return "return_rate"
-        if any(token in text for token in ("销售额", "gmv", "营收", "成交")):
-            return "gmv"
         if any(token in text for token in ("区域", "地区", "地域")):
             return "region_sales"
         if any(token in text for token in ("商品", "sku", "产品")):
             return "product_sales"
+        if any(token in text for token in ("销售额", "gmv", "营收", "成交")):
+            return "gmv"
         return "summary"
 
     def insight(self, *, tenant_id: str, query: str, limit: int = 10) -> CommerceInsight:

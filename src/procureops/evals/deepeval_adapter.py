@@ -86,7 +86,11 @@ class DeepEvalAdapter:
 
     @classmethod
     def build_metrics(
-        cls, names: Iterable[str], *, threshold: float = 0.7
+        cls,
+        names: Iterable[str],
+        *,
+        threshold: float = 0.7,
+        judge_model: Any | None = None,
     ) -> dict[str, Any]:
         metric_classes, _ = cls._imports()
         metrics: dict[str, Any] = {}
@@ -98,7 +102,10 @@ class DeepEvalAdapter:
             if metric_class is None:
                 raise RuntimeError(f"DeepEval installation lacks {class_name}")
             try:
-                metrics[name] = metric_class(threshold=threshold, include_reason=True)
+                kwargs = {"threshold": threshold, "include_reason": True}
+                if judge_model is not None:
+                    kwargs["model"] = judge_model
+                metrics[name] = metric_class(**kwargs)
             except Exception as exc:
                 raise RuntimeError(
                     "DeepEval metric initialization failed; configure the judge model "
@@ -124,8 +131,13 @@ class DeepEvalAdapter:
         *,
         metric_names: Iterable[str] = ("answer_relevancy", "faithfulness"),
         threshold: float = 0.7,
+        judge_model: Any | None = None,
     ) -> list[DeepEvalScore]:
-        metrics = cls.build_metrics(metric_names, threshold=threshold)
+        metrics = cls.build_metrics(
+            metric_names,
+            threshold=threshold,
+            judge_model=judge_model,
+        )
         scores: list[DeepEvalScore] = []
         for row in rows:
             case_id = str(row.get("case_id", "unknown"))

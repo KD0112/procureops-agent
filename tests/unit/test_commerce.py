@@ -35,3 +35,11 @@ def test_commerce_insight_uses_allowlisted_sql(tmp_path):
     assert insight.rows[0]["return_rate_pct"] == 100.0
     assert "SELECT" in insight.sql_template
     store.close()
+
+
+def test_commerce_intent_prefers_dimensions_before_generic_gmv(tmp_path):
+    store = CommerceAnalyticsStore(tmp_path / "commerce.sqlite3")
+    assert store.classify("哪个区域的销售额最高？") == "region_sales"
+    assert store.classify("销售额最高的商品是哪一个？") == "product_sales"
+    assert store.classify("每天的销售额趋势") == "gmv"
+    store.close()

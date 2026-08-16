@@ -79,6 +79,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 - `docs/evaluation/agent-evaluation-observability.md`
 - `docs/evaluation/coding-agent-harness.md`
 - `docs/evaluation/ci-repair-harness.md`
+- `docs/evaluation/real-evidence-2026-08-16.md`：Docker smoke、真实 DeepSeek/DeepEval、人工标注和 Langfuse 凭据状态
 - `skills/repo_change_review/SKILL.md`
 - `docs/governed-evolution-and-models.md`
 - `docs/enterprise-depth-v0.5.md`
@@ -165,6 +166,22 @@ For a one-command infrastructure acceptance after Docker Desktop is running, set
 
 The script deliberately fails if it falls back to in-memory cache or SQLite, so its `enterprise infrastructure smoke: PASS` output is the evidence to keep for the interview.
 v0.4 的五项企业深化证据见 `docs/enterprise-depth-v0.4.md`；第二租户与企业系统集成见 `docs/enterprise-depth-v0.5.md`。
+
+真实质量证据：
+
+```powershell
+& ".\.venv\Scripts\python.exe" scripts\prepare_deepeval_commerce.py
+$env:DEEPEVAL_PER_ATTEMPT_TIMEOUT_SECONDS_OVERRIDE="30"
+$env:DEEPEVAL_PER_TASK_TIMEOUT_SECONDS_OVERRIDE="120"
+& ".\.venv\Scripts\python.exe" scripts\run_deepeval.py `
+  --input reports\deepeval_input_commerce_ops.jsonl `
+  --metrics answer_relevancy `
+  --judge-provider deepseek `
+  --output reports\latest_deepeval_commerce_ops.json
+```
+
+Langfuse trace 是 opt-in 的；配置 `LANGFUSE_PUBLIC_KEY`、`LANGFUSE_SECRET_KEY` 后运行
+`scripts\run_langfuse_trace_smoke.py`，脚本会把发送成功或缺少凭据的状态写入报告，不会伪造云端 trace。
 
 ## 本机 ERP / 供应商 / 物流 HTTP 演示
 

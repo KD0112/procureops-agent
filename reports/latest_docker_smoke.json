@@ -1,0 +1,30 @@
+{
+  "run_at": "2026-08-16T13:54:50.7846201+08:00",
+  "profile": "docker_desktop_windows_wsl2",
+  "docker_server": "29.7.2",
+  "compose_services": {
+    "mysql": {"image": "mysql:8.4", "health": "healthy", "port": 3307},
+    "redis": {"image": "redis:7.4-alpine", "health": "healthy", "port": 6380}
+  },
+  "mysql": {
+    "health": "ok",
+    "schema": "initialized_or_existing",
+    "join_rows": 1,
+    "transaction_outbox": "passed"
+  },
+  "redis": {
+    "ttl_cache": "passed",
+    "streams_publish_claim_ack": "passed"
+  },
+  "api_readiness": {
+    "status": "ok",
+    "cache_backend": "redis",
+    "mysql_backend": "mysql",
+    "queue_backend": "redis-streams"
+  },
+  "result": "PASS",
+  "limitations": [
+    "This is a local Docker Desktop smoke test, not a production HA or load test.",
+    "Secrets and credentials are supplied through environment variables and are not stored in this report."
+  ]
+}

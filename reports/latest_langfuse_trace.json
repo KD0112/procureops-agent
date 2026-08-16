@@ -1,0 +1,16 @@
+{
+  "run_at": "2026-08-16T06:23:25.474730+00:00",
+  "environment": "local",
+  "release": "procureops-local",
+  "base_url": "https://cloud.langfuse.com",
+  "capture_io": false,
+  "credentials_present": false,
+  "required_environment": [
+    "LANGFUSE_ENABLED=1",
+    "LANGFUSE_PUBLIC_KEY",
+    "LANGFUSE_SECRET_KEY"
+  ],
+  "status": "BLOCKED_MISSING_CREDENTIALS",
+  "trace_sent": false,
+  "message": "Langfuse credentials are not configured; no trace was fabricated."
+}

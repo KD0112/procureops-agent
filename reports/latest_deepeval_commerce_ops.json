@@ -1,0 +1,49 @@
+{
+  "case_count": 5,
+  "input": "D:\\new things\\项目1\\project2\\reports\\deepeval_input_commerce_ops.jsonl",
+  "judge_model": "deepseek-v4-flash",
+  "judge_provider": "deepseek",
+  "metrics": [
+    "answer_relevancy"
+  ],
+  "scores": {
+    "answer_relevancy": [
+      {
+        "case_id": "COPS-001",
+        "error": "RetryError",
+        "metric": "answer_relevancy",
+        "reason": null,
+        "score": null
+      },
+      {
+        "case_id": "COPS-002",
+        "error": null,
+        "metric": "answer_relevancy",
+        "reason": "得分是0.71，因为实际输出中包含与判断“哪个区域销售额最高”无关的内容，例如用订单数衡量销售额以及数据来源说明，这些不能直接支持回答；但输出仍部分回应了问题，因此没有更低。",
+        "score": 0.7142857142857143
+      },
+      {
+        "case_id": "COPS-003",
+        "error": null,
+        "metric": "answer_relevancy",
+        "reason": "The score is 0.75 because the actual output includes an irrelevant statement about policy retrieval evidence that does not help identify the product with the highest sales. It is not higher because this unrelated content detracts from fully addressing the question, but it is at 0.75 because the core answer about the highest-sales product is still present and relevant.",
+        "score": 0.75
+      },
+      {
+        "case_id": "COPS-004",
+        "error": null,
+        "metric": "answer_relevancy",
+        "reason": "The score is 0.86 because the output mostly addresses the return rate and required materials, but includes an irrelevant statement about Agent permissions, preventing a higher score.",
+        "score": 0.8571428571428571
+      },
+      {
+        "case_id": "COPS-005",
+        "error": null,
+        "metric": "answer_relevancy",
+        "reason": "The score is 0.67 because the response partially answers the query about supplier warranty period, but includes irrelevant statements about return rate analysis and Agent refund commitment, which prevent a higher score.",
+        "score": 0.6666666666666666
+      }
+    ]
+  },
+  "threshold": 0.7
+}
