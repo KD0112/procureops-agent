@@ -127,6 +127,60 @@ class MySQLBusinessRepository:
                 {"tenant_id": tenant_id},
             )
 
+    async def seed_commerce_demo(self, *, seed_path: Path, tenant_id: str) -> None:
+        """Seed the CommerceOps analytics slice with one idempotent transaction."""
+
+        from sqlalchemy import text
+
+        payload = json.loads(seed_path.read_text(encoding="utf-8"))
+        if payload.get("tenant_id") != tenant_id:
+            raise ValueError("commerce seed tenant_id does not match the requested tenant")
+        async with self.sessions.begin() as session:
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO tenants (tenant_id, display_name)
+                    VALUES (:tenant_id, :display_name)
+                    ON DUPLICATE KEY UPDATE display_name = :display_name
+                    """
+                ),
+                {"tenant_id": tenant_id, "display_name": "电商运营分析演示租户"},
+            )
+            for product in payload.get("products", []):
+                await session.execute(
+                    text(
+                        """
+                        INSERT INTO commerce_products (tenant_id, product_id, name, category)
+                        VALUES (:tenant_id, :product_id, :name, :category)
+                        ON DUPLICATE KEY UPDATE name = :name, category = :category
+                        """
+                    ),
+                    {"tenant_id": tenant_id, **product},
+                )
+            for order in payload.get("orders", []):
+                await session.execute(
+                    text(
+                        """
+                        INSERT INTO commerce_orders
+                            (tenant_id, order_id, product_id, region, order_date,
+                             quantity, unit_price, returned_flag, return_reason)
+                        VALUES (:tenant_id, :order_id, :product_id, :region, :order_date,
+                                :quantity, :unit_price, :returned_flag, :return_reason)
+                        ON DUPLICATE KEY UPDATE
+                            product_id = :product_id, region = :region,
+                            order_date = :order_date, quantity = :quantity,
+                            unit_price = :unit_price, returned_flag = :returned_flag,
+                            return_reason = :return_reason
+                        """
+                    ),
+                    {
+                        "tenant_id": tenant_id,
+                        **order,
+                        "returned_flag": bool(order.get("returned", False)),
+                        "return_reason": order.get("return_reason"),
+                    },
+                )
+
     async def create_task_with_outbox(
         self,
         *,
@@ -198,6 +252,59 @@ class MySQLBusinessRepository:
                     """
                 ),
                 {"tenant_id": tenant_id, "query": f"%{query}%", "limit": limit},
+            )
+            return [dict(row) for row in result.mappings().all()]
+
+    async def commerce_insight(
+        self, *, tenant_id: str, intent: str, limit: int = 10
+    ) -> list[dict[str, Any]]:
+        """Run one of the allowlisted CommerceOps read-only SQL queries."""
+
+        from sqlalchemy import text
+
+        queries = {
+            "summary": """
+                SELECT COUNT(*) AS order_count,
+                       ROUND(SUM(quantity * unit_price), 2) AS gmv,
+                       SUM(returned_flag) AS returned_orders,
+                       ROUND(100.0 * SUM(returned_flag) / NULLIF(COUNT(*), 0), 2)
+                           AS return_rate_pct
+                FROM commerce_orders WHERE tenant_id = :tenant_id
+            """,
+            "return_rate": """
+                SELECT p.product_id, p.name, COUNT(o.order_id) AS order_count,
+                       SUM(o.returned_flag) AS returned_orders,
+                       ROUND(100.0 * SUM(o.returned_flag) / NULLIF(COUNT(o.order_id), 0), 2)
+                           AS return_rate_pct
+                FROM commerce_orders o
+                JOIN commerce_products p
+                  ON p.tenant_id=o.tenant_id AND p.product_id=o.product_id
+                WHERE o.tenant_id = :tenant_id
+                GROUP BY p.product_id, p.name
+                ORDER BY return_rate_pct DESC, order_count DESC LIMIT :limit
+            """,
+            "region_sales": """
+                SELECT region, COUNT(*) AS order_count,
+                       ROUND(SUM(quantity * unit_price), 2) AS gmv
+                FROM commerce_orders WHERE tenant_id = :tenant_id
+                GROUP BY region ORDER BY gmv DESC LIMIT :limit
+            """,
+            "product_sales": """
+                SELECT p.product_id, p.name, p.category,
+                       SUM(o.quantity) AS units,
+                       ROUND(SUM(o.quantity * o.unit_price), 2) AS gmv
+                FROM commerce_orders o
+                JOIN commerce_products p
+                  ON p.tenant_id=o.tenant_id AND p.product_id=o.product_id
+                WHERE o.tenant_id = :tenant_id
+                GROUP BY p.product_id, p.name, p.category
+                ORDER BY gmv DESC LIMIT :limit
+            """,
+        }
+        selected = queries.get(intent, queries["summary"])
+        async with self.sessions() as session:
+            result = await session.execute(
+                text(selected), {"tenant_id": tenant_id, "limit": limit}
             )
             return [dict(row) for row in result.mappings().all()]
 

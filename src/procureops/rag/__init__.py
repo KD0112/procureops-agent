@@ -9,6 +9,7 @@ from procureops.rag.advanced import (
     VectorIndex,
     evaluate_retrieval,
 )
+from procureops.rag.document_parser import DocumentBlock, DocumentParser, ParsedDocument
 from procureops.rag.embeddings import (
     OpenAICompatibleEmbeddingProvider,
     embedding_provider_from_environment,
@@ -21,17 +22,22 @@ from procureops.rag.governance import (
 )
 from procureops.rag.index import HashingEmbeddingProvider, SQLiteKnowledgeIndex
 from procureops.rag.ingestion import DocumentIngestionService
+from procureops.rag.prefetch import PrefetchDecision, decide_prefetch
 from procureops.rag.retrieval import GovernedRetriever, RetrievalHit, Retriever
 
 __all__ = [
     "AdvancedRetriever",
+    "DocumentBlock",
     "DocumentIngestionService",
+    "DocumentParser",
     "GovernedRetriever",
     "HashingEmbeddingProvider",
     "KnowledgeDocument",
     "KnowledgeMetadata",
     "NoiseFilter",
     "OpenAICompatibleEmbeddingProvider",
+    "ParsedDocument",
+    "PrefetchDecision",
     "RAGDiagnostics",
     "RetrievalHit",
     "RetrievalMetrics",
@@ -39,6 +45,7 @@ __all__ = [
     "SQLiteKnowledgeIndex",
     "SmallToBigChunker",
     "VectorIndex",
+    "decide_prefetch",
     "embedding_provider_from_environment",
     "evaluate_retrieval",
     "load_knowledge_document",

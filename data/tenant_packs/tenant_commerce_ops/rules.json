@@ -1,0 +1,16 @@
+{
+  "ruleset_id": "commerce-operations",
+  "version": "1.0.0",
+  "currency": "CNY",
+  "approval_thresholds": [
+    {"min_inclusive": 0, "max_exclusive": 20000, "required_roles": ["procurement_operator"]},
+    {"min_inclusive": 20000, "max_exclusive": 100000, "required_roles": ["department_approver"]},
+    {"min_inclusive": 100000, "max_exclusive": null, "required_roles": ["department_approver", "compliance_approver"]}
+  ],
+  "quote_validity_days": 7,
+  "require_approved_supplier_for_po": true,
+  "require_manual_confirmation_for_equivalent_parts": false,
+  "require_asset_standard_or_technical_specification": false,
+  "require_security_review_for_network_appliances": false,
+  "prohibit_rag_for": ["current_order_status", "current_inventory", "current_price", "refund_execution"]
+}

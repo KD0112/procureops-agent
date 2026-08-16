@@ -518,6 +518,7 @@ def test_api_lists_and_runs_second_tenant_with_server_side_membership(
         assert {item["tenant_id"] for item in tenants.json()["items"]} == {
             "tenant_engineering_machinery",
             "tenant_enterprise_it",
+            "tenant_commerce_ops",
         }
         buyer_session = client.post(
             "/api/auth/local-session",

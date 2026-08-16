@@ -1,0 +1,11 @@
+{
+  "adapter_pack_version": "1.0.0",
+  "supported_profiles": ["local", "http_sandbox", "http_enterprise", "mcp_sandbox", "mcp_readonly"],
+  "adapters": {
+    "catalog_lookup": {"system": "commerce_catalog", "local_adapter": "sqlite_commerce_catalog_v1", "http_contract": "commerce.catalog.search.v1", "http_path": "/commerce/v1/catalog/search"},
+    "supplier_lookup": {"system": "commerce_supplier", "local_adapter": "sqlite_supplier_options_v1", "http_contract": "commerce.supplier.options.v1", "http_path": "/commerce/v1/suppliers/options"},
+    "logistics_quote": {"system": "commerce_logistics", "local_adapter": "sqlite_logistics_quotes_v1", "http_contract": "commerce.logistics.quote.v1", "http_path": "/commerce/v1/logistics/quote"},
+    "purchase_order_draft": {"system": "commerce_erp", "local_adapter": "sqlite_po_draft_v1", "http_contract": "commerce.purchase_order_draft.v1", "http_path": "/commerce/v1/purchase-orders/drafts"}
+  },
+  "external_side_effects_default": "disabled"
+}

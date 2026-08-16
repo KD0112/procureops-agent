@@ -2,6 +2,19 @@
   "manifest_version": "1.0.0",
   "documents": [
     {
+      "document_id": "commerce-refund-policy-v1",
+      "tenant_id": "tenant_commerce_ops",
+      "version": "1.0.0",
+      "classification": "internal",
+      "allowed_roles": [
+        "procurement_operator",
+        "procurement_approver",
+        "compliance_approver"
+      ],
+      "path": "knowledge/tenant_commerce_ops/refund_policy.md",
+      "sha256": "1ed988e1aa3d78f66bc7313ce8d6520c3f551c2ade705cd02ea347706f861422"
+    },
+    {
       "document_id": "EM-POL-APPROVAL-001",
       "tenant_id": "tenant_engineering_machinery",
       "version": "1.0.0",
@@ -143,7 +156,7 @@
         "auditor"
       ],
       "path": "knowledge/tenant_enterprise_it/policies/it_procurement_policy.md",
-      "sha256": "ccf3d200de5bb116627e8af167d74890721bab9d68d30234f86f78070eb32bf3"
+      "sha256": "433b4f06a125f0aee02498b4997c02263844e89226ca424888c676b6e5ad0a7b"
     },
     {
       "document_id": "IT-GUIDE-CATALOG-001",
@@ -158,7 +171,7 @@
         "auditor"
       ],
       "path": "knowledge/tenant_enterprise_it/product_guides/it_catalog_matching_guide.md",
-      "sha256": "9aaf2fcbf69937520f7b635f57109c323fc14a7d58ecc8578579ff3352ce83c5"
+      "sha256": "c533b20a3b78b70d271e990d4396e82d28ec9ab50631c320dc3f7827a0502a56"
     }
   ]
 }

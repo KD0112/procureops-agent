@@ -1,7 +1,7 @@
 # Code-Agent Harness Benchmark
 
 - Dataset: `data/evals/code_agent_v1.jsonl` (30 cases)
-- Run at: `2026-08-16T04:10:43.306077+00:00`
+- Run at: `2026-08-16T05:06:53.176011+00:00`
 - Type: deterministic offline Harness checks; not an LLM quality score.
 
 | Metric | Value |

@@ -37,6 +37,11 @@
 | SSE 任务事件流 | 已实现 | API 持久事件流、前端授权 fetch stream | Last-Event-ID、heartbeat、终态关闭、租户隔离和脱敏测试 |
 | 只读 MCP | 已实现可选 Profile | `integrations/mcp.py`、`run_mcp_sandbox.py` | initialize、tools/list、tools/call、只读白名单、租户/Schema 校验和写工具拒绝 |
 | BM25 + Vector + RRF | 已实现 | `rag/embeddings.py`、`rag/retrieval.py`、`rag/evaluation.py` | ACL 前置过滤、双路排名、RRF、索引指纹和 6 条检索评测 |
+| Advanced RAG pipeline | 已接入 API，可选 | `rag/advanced.py`、`api/app.py`、`runtime.py` | small-to-big、overlap、noise filter、HNSW/IVF-PQ/exact fallback、RRF/rerank、advanced API 回归 |
+| Prefetch 证据门禁 | 已实现 | `rag/prefetch.py`、`POST /api/search/prefetch` | 证据不足阻止生成并返回补充查询建议 |
+| RAG 调试工作台 | 已实现 | `api/static/retrieval-debug.html`、`POST /api/search/diagnostics` | BM25/vector/RRF/rerank/citation 可视化 payload |
+| PDF/OCR/表格保护式解析 | 已实现，可选 OCR | `rag/document_parser.py`、`rag/ingestion.py` | PDF 原生、可选 OCR、DOCX/XLSX/HTML/Markdown 表格 atomic block |
+| CommerceOps 业务切片 | 已实现 | `commerce/`、`tenant_commerce_ops`、`/api/commerce/insights` | SQL 白名单、JOIN/退货率、RAG 政策证据、provenance、读写边界 |
 | Evidence Judge | 已实现模型研究路径 | `agents/research_evidence.py`、`agents/supplier_research.py` | 来源/时间/哈希/可信层级、冲突、投毒、动态事实拒绝和确定性最终选商 |
 | Live Model / Holdout | 已实现 v2 治理 | `evals/live_model.py`、`model_gold_v2.jsonl` | development/regression/locked holdout、质量/安全/P95/Token/成本/基线门禁 |
 

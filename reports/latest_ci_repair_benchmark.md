@@ -1,7 +1,7 @@
 # CI Repair Harness Benchmark
 
 - Dataset: `5` deterministic diagnosis cases + 1 repair flow
-- Run at: `2026-08-16T04:10:46.018740+00:00`
+- Run at: `2026-08-16T05:06:44.948817+00:00`
 - Type: offline, deterministic Harness benchmark; not an LLM code-generation score.
 
 | Metric | Value |

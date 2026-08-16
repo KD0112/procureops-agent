@@ -1,0 +1,18 @@
+{
+  "profile": "offline_fastapi_asgi",
+  "requests": 24,
+  "concurrency": 6,
+  "success_rate": 1.0,
+  "error_count": 0,
+  "cache_hit_rate": 0.7083,
+  "latency_ms": {
+    "p50": 12.459,
+    "p95": 27.063,
+    "max": 32.005,
+    "mean": 14.388
+  },
+  "limitations": [
+    "ASGI in-process benchmark; it does not measure network, TLS, or multi-worker effects.",
+    "Use Docker Redis/MySQL and a representative load profile before making production claims."
+  ]
+}

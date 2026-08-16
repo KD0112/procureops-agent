@@ -78,7 +78,8 @@ class SQLiteKnowledgeIndex:
         return connection
 
     def _ensure_schema(self) -> None:
-        with self._connect() as connection:
+        connection = self._connect()
+        try:
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS index_metadata (
@@ -101,6 +102,8 @@ class SQLiteKnowledgeIndex:
                 ON knowledge_chunks(tenant_id);
                 """
             )
+        finally:
+            connection.close()
 
     def rebuild(self, documents: list[KnowledgeDocument]) -> int:
         chunks = [chunk for document in documents for chunk in _chunks(document)]
@@ -108,7 +111,8 @@ class SQLiteKnowledgeIndex:
         vectors = self.embedding_provider.embed(texts)
         if len(vectors) != len(chunks):
             raise ValueError("embedding provider returned the wrong vector count")
-        with self._connect() as connection:
+        connection = self._connect()
+        try:
             connection.execute("BEGIN IMMEDIATE")
             connection.execute("DELETE FROM knowledge_chunks")
             for chunk, text, vector in zip(chunks, texts, vectors, strict=True):
@@ -130,6 +134,9 @@ class SQLiteKnowledgeIndex:
                 "INSERT INTO index_metadata(key, value) VALUES (?, ?)",
                 sorted(metadata.items()),
             )
+            connection.commit()
+        finally:
+            connection.close()
         return len(chunks)
 
     @staticmethod
@@ -193,7 +200,8 @@ class SQLiteKnowledgeIndex:
         if not tenant_id or not actor_roles:
             return ()
         query_vector = self.embedding_provider.embed([query])[0]
-        with self._connect() as connection:
+        connection = self._connect()
+        try:
             rows = connection.execute(
                 """
                 SELECT * FROM knowledge_chunks WHERE tenant_id=?
@@ -201,6 +209,8 @@ class SQLiteKnowledgeIndex:
                 """,
                 (tenant_id,),
             ).fetchall()
+        finally:
+            connection.close()
         authorized_rows = []
         for row in rows:
             allowed_roles = frozenset(json.loads(row["allowed_roles_json"]))

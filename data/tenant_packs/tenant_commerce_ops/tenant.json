@@ -1,0 +1,15 @@
+{
+  "tenant_id": "tenant_commerce_ops",
+  "display_name": "电商运营分析演示租户",
+  "industry": "ecommerce_operations",
+  "default_currency": "CNY",
+  "timezone": "Asia/Shanghai",
+  "locale": "zh-CN",
+  "tenant_pack_version": "1.0.0",
+  "status": "active",
+  "demo_seed": {
+    "catalog": "seed/catalog.json",
+    "suppliers": "seed/suppliers.json",
+    "analytics": "seed/analytics.json"
+  }
+}

@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from procureops.agents.single import WorkflowResult
+from procureops.api.errors import install_error_handling
 from procureops.codeops import CodeTaskRequest, RepoPilotSkill, RepoPlan
 from procureops.domain.enums import TaskStatus
 from procureops.domain.policy import ApprovalRequirement
@@ -43,6 +44,8 @@ from procureops.infrastructure.cache import (
 )
 from procureops.infrastructure.streams import RedisStreamsQueue
 from procureops.intake.prompts import PROMPT_SCOPE_TEXT_INTAKE
+from procureops.rag.prefetch import decide_prefetch
+from procureops.rag.retrieval import RetrievalHit
 from procureops.runtime import ProcureOpsRuntime
 from procureops.skills import ProcurementEvidenceSkill, SkillRegistry
 from procureops.storage import MySQLBusinessRepository, MySQLSettings
@@ -74,11 +77,26 @@ class ChatRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20_000)
     architecture: str = Field(default="single", pattern="^(single|multi|multi_llm)$")
     session_id: str | None = Field(default=None, max_length=200)
+    prefetch: bool = False
 
 
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2_000)
     top_k: int = Field(default=6, ge=1, le=50)
+    minimum_score: float = Field(default=0, ge=0, le=1)
+    pipeline: str = Field(default="baseline", pattern="^(baseline|advanced)$")
+
+
+class PrefetchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2_000)
+    top_k: int = Field(default=6, ge=1, le=50)
+    minimum_score: float = Field(default=0.2, ge=0, le=1)
+    pipeline: str = Field(default="advanced", pattern="^(baseline|advanced)$")
+
+
+class CommerceInsightRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=2_000)
+    limit: int = Field(default=10, ge=1, le=50)
 
 
 class SkillRequest(BaseModel):
@@ -194,6 +212,7 @@ def create_app(
             "multi-agent experiments, and Harness controls."
         ),
     )
+    install_error_handling(app)
     app.state.runtime = runtime
     app.state.allow_header_auth = allow_header_auth
     try:
@@ -357,6 +376,23 @@ def create_app(
                 tenant_id=actor.tenant_id, actor_id=actor.actor_id
             ):
                 raise HTTPException(status_code=429, detail="chat rate limit exceeded")
+            prefetch = None
+            if request.prefetch:
+                hits = await _search_hits(
+                    runtime,
+                    actor=actor,
+                    query=request.text,
+                    top_k=6,
+                    minimum_score=0,
+                    pipeline="advanced",
+                )
+                prefetch = decide_prefetch(request.text, hits)
+                if not prefetch.should_call_llm:
+                    return {
+                        "status": "needs_evidence",
+                        "api": "chat",
+                        "prefetch": prefetch.as_dict(),
+                    }
             result = create_text_task(
                 TextTaskRequest(text=request.text, architecture=request.architecture), actor
             )
@@ -367,6 +403,8 @@ def create_app(
                 value={"last_task_id": result["task_id"], "last_text": request.text[:500]},
             )
             response = {**result, "session_id": session_id, "api": "chat"}
+            if prefetch is not None:
+                response["prefetch"] = prefetch.as_dict()
             observation.update(output={"task_id": result["task_id"], "session_id": session_id})
             return response
 
@@ -378,27 +416,42 @@ def create_app(
         with runtime.observability.observe(
             name="api.search",
             as_type="retriever",
-            input={"query": request.query, "top_k": request.top_k},
+            input={
+                "query": request.query,
+                "top_k": request.top_k,
+                "pipeline": request.pipeline,
+            },
             metadata={"tenant_id": actor.tenant_id, "actor_id": actor.actor_id},
         ) as observation:
             if not await app.state.rate_limiter.allow(
                 tenant_id=actor.tenant_id, actor_id=actor.actor_id
             ):
                 raise HTTPException(status_code=429, detail="search rate limit exceeded")
-            arguments = {"query": request.query, "top_k": request.top_k}
+            arguments = {
+                "query": request.query,
+                "top_k": request.top_k,
+                "minimum_score": request.minimum_score,
+                "pipeline": request.pipeline,
+            }
             cached = await app.state.tool_cache.get(
                 tenant_id=actor.tenant_id, tool_name="rag_search", arguments=arguments
             )
             if cached is not None:
                 observation.update(output={"cache": "hit", "hit_count": len(cached)})
-                return {"items": cached, "cache": "hit"}
-            hits = await asyncio.to_thread(
-                runtime.retriever.search,
-                tenant_id=actor.tenant_id,
-                actor_roles=actor.roles,
+                cached_hits = tuple(RetrievalHit.model_validate(item) for item in cached)
+                return {
+                    "items": cached,
+                    "cache": "hit",
+                    "prefetch": decide_prefetch(request.query, cached_hits).as_dict(),
+                    "pipeline": _retrieval_pipeline(cached),
+                }
+            hits = await _search_hits(
+                runtime,
+                actor=actor,
                 query=request.query,
                 top_k=request.top_k,
-                minimum_score=0,
+                minimum_score=request.minimum_score,
+                pipeline=request.pipeline,
             )
             items = [hit.model_dump(mode="json") for hit in hits]
             await app.state.tool_cache.put(
@@ -408,7 +461,104 @@ def create_app(
                 value=items,
             )
             observation.update(output={"cache": "miss", "hit_count": len(items)})
-            return {"items": items, "cache": "miss"}
+            return {
+                "items": items,
+                "cache": "miss",
+                "prefetch": decide_prefetch(request.query, hits).as_dict(),
+                "pipeline": _retrieval_pipeline(items),
+            }
+
+    @app.post("/api/search/prefetch")
+    async def search_prefetch(
+        request: PrefetchRequest,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        """Run retrieval before generation and explicitly gate LLM usage."""
+
+        hits = await _search_hits(
+            runtime,
+            actor=actor,
+            query=request.query,
+            top_k=request.top_k,
+            minimum_score=0,
+            pipeline=request.pipeline,
+        )
+        decision = decide_prefetch(
+            request.query,
+            hits,
+            minimum_score=request.minimum_score,
+        )
+        items = [hit.model_dump(mode="json") for hit in hits]
+        return {
+            "query": request.query,
+            "items": items,
+            "prefetch": decision.as_dict(),
+            "pipeline": _retrieval_pipeline(items),
+        }
+
+    @app.post("/api/search/diagnostics")
+    async def search_diagnostics(
+        request: PrefetchRequest,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        """Retrieval workbench payload for BM25/vector/RRF/rerank inspection."""
+
+        hits = await _search_hits(
+            runtime,
+            actor=actor,
+            query=request.query,
+            top_k=request.top_k,
+            minimum_score=0,
+            pipeline=request.pipeline,
+        )
+        items = [hit.model_dump(mode="json") for hit in hits]
+        return {
+            "query": request.query,
+            "prefetch": decide_prefetch(
+                request.query, hits, minimum_score=request.minimum_score
+            ).as_dict(),
+            "pipeline": _retrieval_pipeline(items),
+            "items": items,
+        }
+
+    @app.get("/debug/retrieval", include_in_schema=False)
+    def retrieval_workbench() -> FileResponse:
+        return FileResponse(STATIC_ROOT / "retrieval-debug.html")
+
+    @app.post("/api/commerce/insights")
+    async def commerce_insights(
+        request: CommerceInsightRequest,
+        actor: Annotated[Actor, Depends(actor_from_headers)],
+    ) -> dict[str, Any]:
+        if actor.tenant_id != "tenant_commerce_ops":
+            raise HTTPException(status_code=403, detail="commerce tenant required")
+        insight = await asyncio.to_thread(
+            runtime.commerce.insight,
+            tenant_id=actor.tenant_id,
+            query=request.query,
+            limit=request.limit,
+        )
+        hits = await _search_hits(
+            runtime,
+            actor=actor,
+            query=request.query,
+            top_k=4,
+            minimum_score=0,
+            pipeline="advanced",
+        )
+        evidence = decide_prefetch(request.query, hits)
+        return {
+            "query": request.query,
+            "analytics": insight.as_dict(),
+            "policy_evidence": [hit.model_dump(mode="json") for hit in hits],
+            "prefetch": evidence.as_dict(),
+            "provenance": _commerce_provenance(runtime),
+            "execution_contract": {
+                "sql": "allowlisted_read_only_query",
+                "rag": "policy_evidence_only",
+                "writes": "disabled",
+            },
+        }
 
     @app.get("/api/skills")
     def list_skills() -> dict[str, Any]:
@@ -1225,6 +1375,74 @@ def _get_task(runtime: ProcureOpsRuntime, *, actor: Actor, task_id: str):
         return runtime.repository.get_task(tenant_id=actor.tenant_id, task_id=task_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="task not found") from exc
+
+
+async def _search_hits(
+    runtime: ProcureOpsRuntime,
+    *,
+    actor: Actor,
+    query: str,
+    top_k: int,
+    minimum_score: float,
+    pipeline: str = "baseline",
+):
+    if pipeline == "advanced":
+        hits = await asyncio.to_thread(
+            runtime.advanced_retriever.search,
+            tenant_id=actor.tenant_id,
+            actor_roles=actor.roles,
+            query=query,
+            top_k=top_k,
+        )
+        return tuple(hit for hit in hits if hit.score >= minimum_score)
+    return await asyncio.to_thread(
+        runtime.retriever.search,
+        tenant_id=actor.tenant_id,
+        actor_roles=actor.roles,
+        query=query,
+        top_k=top_k,
+        minimum_score=minimum_score,
+    )
+
+
+def _retrieval_pipeline(items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Serialize the retrieval explanation used by the debug workbench."""
+
+    return {
+        "stages": [
+            {"name": "authorization_filter", "count": len(items)},
+            {"name": "bm25_and_vector_candidates", "count": len(items)},
+            {"name": "rrf_fusion", "count": len(items)},
+            {"name": "rerank_and_parent_context", "count": len(items)},
+        ],
+        "explanations": [
+            {
+                "document_id": item.get("document_id"),
+                "heading": item.get("heading"),
+                "bm25_rank": item.get("bm25_rank"),
+                "vector_rank": item.get("vector_rank"),
+                "bm25_score": item.get("lexical_score"),
+                "vector_score": item.get("semantic_score"),
+                "rrf_score": item.get("rrf_score"),
+                "rerank_score": item.get("score"),
+                "citation": item.get("citation"),
+            }
+            for item in items
+        ],
+    }
+
+
+def _commerce_provenance(runtime: ProcureOpsRuntime) -> dict[str, Any]:
+    path = runtime.project_root / "data" / "provenance.yaml"
+    if not path.is_file():
+        return {"status": "unknown"}
+    try:
+        import yaml
+
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"status": "unavailable"}
+    return payload if isinstance(payload, dict) else {"status": "invalid"}
 
 
 def _require_role(actor: Actor, role: str) -> None:

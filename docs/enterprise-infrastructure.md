@@ -294,6 +294,21 @@ Skill 是业务流程，MCP 是 Tool 的协议。`procurement_evidence` Skill �
 8. 需要多角色上下文隔离时，再增加第二个 Skill 或 sub-agent，不要盲目拆多 Agent；
 9. 生产部署使用 OIDC/SSO、密钥管理、数据库备份和对象存储，不使用 local-session 演示身份。
 
+## 十二、CommerceOps 与本轮 RAG 补强（2026-08-16）
+
+本轮在不破坏离线 profile 的前提下增加了 `tenant_commerce_ops` 垂直切片。它使用固定白名单 SQL 查询订单/商品/区域/退货率，再使用 RAG 查询退款政策；SQL 负责动态业务事实，RAG 负责版本化政策证据，二者通过 `/api/commerce/insights` 合并，并明确 `writes=disabled`。
+
+RAG 现在提供 `baseline` 和 `advanced` pipeline。advanced pipeline 已接入 runtime/API，包含 small-to-big、overlap、noise filter、HNSW/IVF-PQ/exact fallback、BM25/vector/RRF/rerank、Prefetch 证据门禁和 `/debug/retrieval` 诊断台。文档解析增加 PDF 原生 + 可选 OCR、DOCX/XLSX/HTML/Markdown 表格保护式 block。
+
+新增验收命令：
+
+```powershell
+& ".\.venv\Scripts\python.exe" scripts\run_api_concurrency_benchmark.py
+& ".\.venv\Scripts\python.exe" scripts\seed_mysql_commerce.py
+```
+
+本次代码验收已通过全量 pytest、Ruff、compileall、知识库 manifest、RAG benchmark 和 API 并发 benchmark。2026-08-16 重启后的 Docker 重验中，Docker Desktop 曾短暂报告 Server `29.7.2`，但执行 `docker compose up -d` 时 Linux engine 返回 EOF 并随后停止；因此本轮没有把新的 MySQL/Redis smoke 标记为通过。此前历史记录中的本机 smoke 结果仍保留，但如需最新证据，应重新启动 Docker Desktop 后执行 `scripts\smoke_infra.py`。
+
 简历中可以写“实现可切换 SQLite/MySQL、内存/Redis、SQLite Queue/Redis Streams 的企业 Agent profile”，但只有完成 Docker 真服务验收和性能记录后，才写具体延迟、吞吐或命中率提升数字。
 ## 历史安装过程（重启前）
 

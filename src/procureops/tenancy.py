@@ -15,6 +15,7 @@ class DemoSeedConfig(BaseModel):
 
     catalog: str
     suppliers: str
+    analytics: str | None = None
 
 
 class TenantDescriptor(BaseModel):

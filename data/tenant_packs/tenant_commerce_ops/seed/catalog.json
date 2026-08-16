@@ -1,0 +1,6 @@
+[
+  {"product_id":"commerce-laptop-a","sku":"COM-LAP-A","name":"轻薄办公本 A","category":"电脑数码","aliases":["办公本","笔记本A"],"compatibility_tags":["16GB","512GB"],"unit":"台","demo_unit_price":"4299.00"},
+  {"product_id":"commerce-monitor-b","sku":"COM-MON-B","name":"27 英寸办公显示器 B","category":"电脑数码","aliases":["显示器B","27寸显示器"],"compatibility_tags":["4K","USB-C"],"unit":"台","demo_unit_price":"1899.00"},
+  {"product_id":"commerce-chair-c","sku":"COM-CHAIR-C","name":"人体工学办公椅 C","category":"办公家具","aliases":["办公椅C","人体工学椅"],"compatibility_tags":["可调腰托"],"unit":"把","demo_unit_price":"1299.00"},
+  {"product_id":"commerce-dock-d","sku":"COM-DOCK-D","name":"多接口扩展坞 D","category":"电脑数码","aliases":["扩展坞D"],"compatibility_tags":["100W PD"],"unit":"个","demo_unit_price":"499.00"}
+]

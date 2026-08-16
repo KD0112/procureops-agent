@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RAG Retrieval Workbench</title>
+    <style>
+      body { max-width: 1180px; margin: 2rem auto; padding: 0 1rem; font: 15px/1.6 system-ui, sans-serif; color: #172033; }
+      input, button { padding: .55rem .7rem; margin: .25rem; }
+      input { min-width: 16rem; }
+      button { cursor: pointer; }
+      pre { background: #f4f6fa; padding: 1rem; overflow: auto; border-radius: .5rem; }
+      table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+      th, td { border: 1px solid #d8deea; padding: .45rem; text-align: left; }
+      th { background: #eef2f8; }
+      .warning { color: #9a3b00; }
+    </style>
+  </head>
+  <body>
+    <h1>RAG 检索调试工作台</h1>
+    <p>查看 Prefetch、BM25、Vector、RRF 与最终 rerank 结果。此页面不调用 LLM。</p>
+    <label>问题 <input id="query" value="退款政策和退货率怎么判断" /></label>
+    <label>租户 <input id="tenant" value="tenant_commerce_ops" /></label>
+    <label>角色 <input id="roles" value="procurement_operator" /></label>
+    <button id="run">运行检索诊断</button>
+    <p id="status"></p>
+    <h2>Prefetch</h2>
+    <pre id="prefetch">尚未运行</pre>
+    <h2>Pipeline</h2>
+    <pre id="pipeline">尚未运行</pre>
+    <h2>Chunk 诊断</h2>
+    <table>
+      <thead><tr><th>文档</th><th>BM25 rank/score</th><th>Vector rank/score</th><th>RRF</th><th>Rerank</th><th>Citation</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      $('run').onclick = async () => {
+        $('status').textContent = '检索中…';
+        const response = await fetch('/api/search/diagnostics', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-Tenant-Id': $('tenant').value, 'X-Actor-Id': 'debug-workbench', 'X-Actor-Roles': $('roles').value},
+          body: JSON.stringify({query: $('query').value, top_k: 8, minimum_score: 0.2})
+        });
+        const payload = await response.json();
+        if (!response.ok) { $('status').textContent = payload.message || '请求失败'; return; }
+        $('status').textContent = payload.prefetch.should_call_llm ? '证据足够：可以进入回答阶段' : '证据不足：已阻止回答阶段';
+        $('status').className = payload.prefetch.should_call_llm ? '' : 'warning';
+        $('prefetch').textContent = JSON.stringify(payload.prefetch, null, 2);
+        $('pipeline').textContent = JSON.stringify(payload.pipeline, null, 2);
+        $('rows').replaceChildren();
+        for (const item of payload.pipeline.explanations) {
+          const row = document.createElement('tr');
+          const values = [
+            `${item.document_id ?? '-'}\n${item.heading ?? '-'}`,
+            `${item.bm25_rank ?? '-'} / ${item.bm25_score ?? '-'}`,
+            `${item.vector_rank ?? '-'} / ${item.vector_score ?? '-'}`,
+            item.rrf_score ?? '-',
+            item.rerank_score ?? '-',
+            item.citation ?? '-',
+          ];
+          for (const value of values) {
+            const cell = document.createElement('td');
+            cell.textContent = String(value);
+            cell.style.whiteSpace = 'pre-line';
+            row.appendChild(cell);
+          }
+          $('rows').appendChild(row);
+        }
+      };
+    </script>
+  </body>
+</html>

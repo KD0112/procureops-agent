@@ -1,0 +1,15 @@
+dataset_version: commerce-demo-v1
+status: synthetic_demo
+purpose: "展示 SQL 分析、RAG 政策证据与 Agent 路由的工程闭环"
+sources:
+  - id: generated_schema
+    type: manually_defined_schema
+    description: "按电商订单、商品、退货率分析需求设计的最小业务模式"
+  - id: generated_records
+    type: synthetic_records
+    description: "用于离线 smoke test 的合成订单，不代表真实企业生产数据"
+  - id: reviewed_edge_cases
+    type: human_reviewed_cases
+    description: "退货、区域聚合、政策证据不足和越权执行边界"
+ground_truth_policy: "统计结果来自固定 SQL；政策结论来自带版本和引用的知识文档"
+holdout_policy: "评测 holdout 不参与索引参数调优"

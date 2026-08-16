@@ -7,7 +7,7 @@ from procureops.tenancy import TenantPackRegistry
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_registry_discovers_two_versioned_tenant_packs() -> None:
+def test_registry_discovers_versioned_tenant_packs() -> None:
     registry = TenantPackRegistry(PROJECT_ROOT / "data" / "tenant_packs")
 
     packs = registry.all()
@@ -15,6 +15,7 @@ def test_registry_discovers_two_versioned_tenant_packs() -> None:
     assert {pack.tenant.tenant_id for pack in packs} == {
         "tenant_engineering_machinery",
         "tenant_enterprise_it",
+        "tenant_commerce_ops",
     }
     for pack in packs:
         assert pack.tenant.tenant_pack_version

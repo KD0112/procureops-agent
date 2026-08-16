@@ -23,6 +23,9 @@ ProcureOps Agent 是一个以采购任务为中心的企业 Agent 项目。第�
 - 已实现单任务最多 5 个附件的证据合并与冲突 fail-closed，并提供保留审计的任务软删除。
 - 已实现持久化 SSE 任务事件流、只读 MCP transport、BM25 + Vector + RRF、Evidence Judge 与 development/regression/locked holdout 评测分层。
 - 已新增 CI/代码问题诊断闭环：`/api/skills/repo-ci-repair` 只读解析 CI 日志，再在隔离工作区执行结构化修复、测试门禁、Diff/SHA-256 和人工审批停点。
+- 已新增 CommerceOps 电商运营分析租户：只读 SQL/JOIN 分析、RAG 退款政策证据、数据来源 provenance 和 SQL+RAG 执行契约。
+- 已补齐生产化 RAG 入口：`baseline/advanced` pipeline、small-to-big、噪声去重、HNSW/IVF-PQ/exact fallback、Prefetch 证据门禁、检索诊断工作台和稳定错误信封。
+- 文档解析新增 PDF 原生提取 + 可选 OCR 回退、DOCX/XLSX/HTML 表格保护式切分；扫描 PDF 的 OCR 依赖仍需显式安装并按真实样本评测。
 - 当前网站默认 `single` 且 `PROCUREOPS_ENABLE_LIVE_MODELS=0`，普通演示不调用 DeepSeek、GLM 或 Qwen；模型多 Agent 必须显式开启。
 
 ## 核心不变量
@@ -55,6 +58,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 & ".\.venv\Scripts\python.exe" scripts\generate_eval_dataset.py
 & ".\.venv\Scripts\python.exe" scripts\run_evaluation.py
 & ".\.venv\Scripts\python.exe" scripts\run_cross_tenant_evaluation.py
+& ".\.venv\Scripts\python.exe" scripts\run_api_concurrency_benchmark.py
+& ".\.venv\Scripts\python.exe" scripts\run_rag_latency_benchmark.py
 ```
 
 第一条命令完全不调用 LLM，会展示任务暂停审批和恢复后生成 PO 草稿。评测命令运行相同的 100 条用例并输出三种 Agent 架构对照报告；模型多 Agent 使用 FakeModel，不调用付费 API。
@@ -83,6 +88,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 - `docs/interview/00_项目总览与验收矩阵.md`
 - `docs/interview/01_面试演示与简历写法.md`
 - `docs/interview/02_高频追问与参考回答.md`
+- `docs/interview/03_生产化RAG与CommerceOps复习.md`
 
 ## Local task workbench (v0.5)
 
@@ -136,6 +142,20 @@ $env:PROCUREOPS_QUEUE_BACKEND="redis-streams"
 ```
 
 To use the Redis Streams RAG worker, the environment above already sets `PROCUREOPS_QUEUE_BACKEND=redis-streams`; run `scripts\run_rag_stream_worker.py --loop` in another terminal. User uploads are staged by default; only a compliance approver can request indexing into the governed RAG corpus.
+
+检索调试与电商垂直切片：
+
+```powershell
+# 浏览器打开，查看 BM25/vector/RRF/rerank、citation 和 Prefetch 决策
+Start-Process http://127.0.0.1:8030/debug/retrieval
+
+# 真实 MySQL 业务种子（需要先设置 PROCUREOPS_MYSQL_URL）
+& ".\.venv\Scripts\python.exe" scripts\seed_mysql_commerce.py
+```
+
+`POST /api/search` 默认保持 `baseline` 兼容模式；传入 `"pipeline": "advanced"` 使用
+small-to-big + noise filter + HNSW/IVF-PQ/exact fallback。`POST /api/search/prefetch` 和
+`POST /api/chat` 的 `prefetch=true` 会在生成前执行证据门禁；证据不足时返回补充查询建议，不创建 LLM 任务。
 
 For a one-command infrastructure acceptance after Docker Desktop is running, set the three environment variables above and run:
 

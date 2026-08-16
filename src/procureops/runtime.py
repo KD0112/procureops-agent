@@ -8,6 +8,7 @@ from pathlib import Path
 from procureops.agents import LLMSupervisorWorkflow, SingleAgentWorkflow, SupervisorWorkflow
 from procureops.agents.single import policy_for_tenant
 from procureops.auth import AuthService
+from procureops.commerce import CommerceAnalyticsStore
 from procureops.config import load_environment
 from procureops.demo import seed_demo_database
 from procureops.domain.models import RunBudget, RunContext
@@ -19,7 +20,11 @@ from procureops.integrations import IntegrationSuiteFactory
 from procureops.integrations.research import research_connector_from_environment
 from procureops.memory import MemoryService
 from procureops.observability import LangfuseTracer
-from procureops.rag import SQLiteKnowledgeIndex, embedding_provider_from_environment
+from procureops.rag import (
+    AdvancedRetriever,
+    SQLiteKnowledgeIndex,
+    embedding_provider_from_environment,
+)
 from procureops.rag.governance import scan_knowledge_base
 from procureops.storage import ProcureOpsRepository, SQLiteDatabase
 from procureops.storage.blobs import LocalBlobStore
@@ -38,6 +43,7 @@ class ProcureOpsRuntime:
     outbox: SQLiteOutbox
     blobs: LocalBlobStore
     retriever: SQLiteKnowledgeIndex
+    advanced_retriever: AdvancedRetriever
     memory: MemoryService
     auth: AuthService
     evolution: EvolutionService
@@ -47,6 +53,7 @@ class ProcureOpsRuntime:
     replay_root: Path
     var_root: Path
     observability: LangfuseTracer
+    commerce: CommerceAnalyticsStore
 
     @classmethod
     def create(
@@ -63,9 +70,22 @@ class ProcureOpsRuntime:
         database = SQLiteDatabase(database_path or runtime_root / "procureops.sqlite3")
         repository = seed_demo_database(database, project_root=project_root)
         tenants = TenantPackRegistry(project_root / "data" / "tenant_packs")
+        commerce_seed = (
+            project_root
+            / "data"
+            / "tenant_packs"
+            / "tenant_commerce_ops"
+            / "seed"
+            / "analytics.json"
+        )
+        commerce = CommerceAnalyticsStore(
+            runtime_root / "commerce.sqlite3",
+            seed_path=commerce_seed if commerce_seed.exists() else None,
+        )
+        embedding_provider = embedding_provider_from_environment()
         retriever = SQLiteKnowledgeIndex(
             path=runtime_root / "rag" / "multi_tenant.sqlite3",
-            embedding_provider=embedding_provider_from_environment(),
+            embedding_provider=embedding_provider,
         )
         documents = scan_knowledge_base(project_root / "knowledge")
         uploaded_knowledge_root = runtime_root / "knowledge_uploads"
@@ -73,6 +93,13 @@ class ProcureOpsRuntime:
             documents.extend(scan_knowledge_base(uploaded_knowledge_root))
         if not retriever.is_current(documents):
             retriever.rebuild(documents)
+        advanced_retriever = AdvancedRetriever(
+            documents=documents,
+            embedding_provider=embedding_provider,
+            backend=os.getenv("PROCUREOPS_RAG_ANN_BACKEND", "hnsw").strip().casefold()
+            or "hnsw",
+        )
+        advanced_retriever.build()
         evolution = EvolutionService(database)
         auth = AuthService(database)
         for pack in tenants.all():
@@ -88,6 +115,7 @@ class ProcureOpsRuntime:
             outbox=SQLiteOutbox(database, queue),
             blobs=LocalBlobStore(runtime_root / "uploads"),
             retriever=retriever,
+            advanced_retriever=advanced_retriever,
             memory=MemoryService(database),
             auth=auth,
             evolution=evolution,
@@ -100,6 +128,7 @@ class ProcureOpsRuntime:
             replay_root=runtime_root / "replays" / "api",
             var_root=runtime_root,
             observability=LangfuseTracer.from_environment(),
+            commerce=commerce,
         )
 
     def agent(

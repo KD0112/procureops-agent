@@ -1,0 +1,24 @@
+{
+  "tenant_id": "tenant_commerce_ops",
+  "dataset_version": "commerce-demo-v1",
+  "products": [
+    {"product_id":"commerce-laptop-a","name":"轻薄办公本 A","category":"电脑数码"},
+    {"product_id":"commerce-monitor-b","name":"27 英寸办公显示器 B","category":"电脑数码"},
+    {"product_id":"commerce-chair-c","name":"人体工学办公椅 C","category":"办公家具"},
+    {"product_id":"commerce-dock-d","name":"多接口扩展坞 D","category":"电脑数码"}
+  ],
+  "orders": [
+    {"order_id":"CO-1001","product_id":"commerce-laptop-a","region":"华东","order_date":"2026-07-01","quantity":2,"unit_price":4299,"returned":false},
+    {"order_id":"CO-1002","product_id":"commerce-monitor-b","region":"华东","order_date":"2026-07-02","quantity":5,"unit_price":1899,"returned":true,"return_reason":"屏幕瑕疵"},
+    {"order_id":"CO-1003","product_id":"commerce-chair-c","region":"华南","order_date":"2026-07-03","quantity":3,"unit_price":1299,"returned":false},
+    {"order_id":"CO-1004","product_id":"commerce-dock-d","region":"华北","order_date":"2026-07-04","quantity":8,"unit_price":499,"returned":true,"return_reason":"接口不兼容"},
+    {"order_id":"CO-1005","product_id":"commerce-laptop-a","region":"华南","order_date":"2026-07-05","quantity":4,"unit_price":4299,"returned":false},
+    {"order_id":"CO-1006","product_id":"commerce-monitor-b","region":"华北","order_date":"2026-07-06","quantity":2,"unit_price":1899,"returned":false},
+    {"order_id":"CO-1007","product_id":"commerce-chair-c","region":"华东","order_date":"2026-07-07","quantity":6,"unit_price":1299,"returned":true,"return_reason":"尺寸不合适"},
+    {"order_id":"CO-1008","product_id":"commerce-dock-d","region":"华南","order_date":"2026-07-08","quantity":10,"unit_price":499,"returned":false},
+    {"order_id":"CO-1009","product_id":"commerce-laptop-a","region":"华北","order_date":"2026-07-09","quantity":1,"unit_price":4299,"returned":true,"return_reason":"配送损坏"},
+    {"order_id":"CO-1010","product_id":"commerce-monitor-b","region":"华南","order_date":"2026-07-10","quantity":7,"unit_price":1899,"returned":false},
+    {"order_id":"CO-1011","product_id":"commerce-chair-c","region":"华北","order_date":"2026-07-11","quantity":2,"unit_price":1299,"returned":false},
+    {"order_id":"CO-1012","product_id":"commerce-dock-d","region":"华东","order_date":"2026-07-12","quantity":4,"unit_price":499,"returned":true,"return_reason":"接口不兼容"}
+  ]
+}

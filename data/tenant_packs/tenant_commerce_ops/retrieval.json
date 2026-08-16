@@ -1,0 +1,11 @@
+{
+  "retrieval_config_version": "1.0.0",
+  "tenant_id": "tenant_commerce_ops",
+  "allowed_statuses": ["approved"],
+  "allowed_classifications": ["public", "internal"],
+  "top_k": 6,
+  "minimum_score": 0.2,
+  "require_citations": true,
+  "deny_dynamic_facts": true,
+  "hybrid_weights": {"semantic": 0.5, "keyword": 0.5}
+}

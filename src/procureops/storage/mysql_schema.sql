@@ -53,6 +53,33 @@ CREATE TABLE IF NOT EXISTS quotations (
         REFERENCES suppliers(tenant_id, supplier_id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS commerce_products (
+    tenant_id VARCHAR(100) NOT NULL,
+    product_id VARCHAR(100) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    category VARCHAR(100) NOT NULL,
+    PRIMARY KEY (tenant_id, product_id),
+    KEY idx_commerce_products_category (tenant_id, category),
+    CONSTRAINT fk_commerce_products_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(tenant_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS commerce_orders (
+    tenant_id VARCHAR(100) NOT NULL,
+    order_id VARCHAR(100) NOT NULL,
+    product_id VARCHAR(100) NOT NULL,
+    region VARCHAR(100) NOT NULL,
+    order_date DATE NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(18, 4) NOT NULL,
+    returned_flag BOOLEAN NOT NULL DEFAULT FALSE,
+    return_reason VARCHAR(255) NULL,
+    PRIMARY KEY (tenant_id, order_id),
+    KEY idx_commerce_orders_date (tenant_id, order_date),
+    KEY idx_commerce_orders_product (tenant_id, product_id),
+    CONSTRAINT fk_commerce_orders_product FOREIGN KEY (tenant_id, product_id)
+        REFERENCES commerce_products(tenant_id, product_id)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS procurement_tasks (
     tenant_id VARCHAR(100) NOT NULL,
     task_id VARCHAR(100) NOT NULL,

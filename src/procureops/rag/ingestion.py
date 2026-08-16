@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import hashlib
 from datetime import date, timedelta
-from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+from procureops.rag.document_parser import DocumentParser
 from procureops.rag.governance import scan_knowledge_base
 from procureops.rag.index import SQLiteKnowledgeIndex
 
@@ -44,7 +44,8 @@ class DocumentIngestionService:
         documents: list[dict[str, Any]] = []
         for upload in uploads:
             raw = blob_resolver(str(upload["storage_key"])).read_bytes()
-            text = _extract_text(Path(str(upload["original_filename"])), raw)
+            parsed = DocumentParser().parse(str(upload["original_filename"]), raw)
+            text = parsed.text
             if not text.strip():
                 raise ValueError(f"uploaded document is empty: {upload['original_filename']}")
             digest = hashlib.sha256(raw).hexdigest()
@@ -58,6 +59,7 @@ class DocumentIngestionService:
                     filename=str(upload["original_filename"]),
                     content=text,
                     approved=approved_for_retrieval,
+                    parser_diagnostics=parsed.diagnostics(),
                 ),
                 encoding="utf-8",
             )
@@ -67,6 +69,8 @@ class DocumentIngestionService:
                     "filename": upload["original_filename"],
                     "sha256": digest,
                     "chars": len(text),
+                    "parser": parsed.parser,
+                    "parser_diagnostics": parsed.diagnostics(),
                     "status": "indexed" if approved_for_retrieval else "staged",
                 }
             )
@@ -90,17 +94,6 @@ def _safe_name(value: str) -> str:
     )
 
 
-def _extract_text(path: Path, raw: bytes) -> str:
-    if path.suffix.casefold() == ".pdf":
-        try:
-            from pypdf import PdfReader
-        except ImportError as exc:
-            raise RuntimeError("pypdf is required for PDF ingestion") from exc
-        reader = PdfReader(BytesIO(raw))
-        return "\n".join(page.extract_text() or "" for page in reader.pages)
-    return raw.decode("utf-8-sig", errors="replace")
-
-
 def _governed_markdown(
     *,
     document_id: str,
@@ -109,6 +102,7 @@ def _governed_markdown(
     filename: str,
     content: str,
     approved: bool,
+    parser_diagnostics: dict[str, Any],
 ) -> str:
     today = date.today()
     review_due = today + timedelta(days=365)
@@ -123,6 +117,9 @@ def _governed_markdown(
         f"owner: {actor_id}\n"
         f"effective_from: {today.isoformat()}\n"
         f"review_due: {review_due.isoformat()}\n"
+        f"parser: {parser_diagnostics.get('parser', 'unknown')}\n"
+        f"table_count: {parser_diagnostics.get('table_count', 0)}\n"
+        f"ocr_block_count: {parser_diagnostics.get('ocr_block_count', 0)}\n"
         "classification: internal\n"
         "contains_dynamic_facts: false\n"
         "allowed_roles:\n"

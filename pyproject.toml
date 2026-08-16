@@ -36,6 +36,15 @@ quality = [
   "langfuse>=4,<5",
   "opentelemetry-api>=1.39,<2",
 ]
+documents = [
+  "Pillow>=10,<13",
+  "python-docx>=1.1,<2",
+]
+ocr = [
+  "numpy>=1.26,<3",
+  "pymupdf>=1.24,<2",
+  "rapidocr-onnxruntime>=1.4,<2",
+]
 infra = [
   "sqlalchemy>=2.0,<3",
   "asyncmy>=0.2,<1",
@@ -60,7 +69,11 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/procureops/agents/single.py" = ["RUF001"]
+"src/procureops/api/errors.py" = ["RUF001"]
+"src/procureops/rag/prefetch.py" = ["RUF001"]
 "src/procureops/evals/runner.py" = ["RUF001"]
 "src/procureops/evals/live_model.py" = ["RUF001"]
 "src/procureops/intake/service.py" = ["RUF001"]
 "scripts/generate_demo_pdf.py" = ["RUF001"]
+"tests/integration/test_commerce_api.py" = ["RUF001"]
+"tests/unit/test_commerce.py" = ["RUF001"]
